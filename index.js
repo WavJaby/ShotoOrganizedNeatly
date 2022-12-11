@@ -274,10 +274,10 @@ function Piece(x, y, w, h, id, shape, image) {
 
 			// Check to stick
 			const x = selectedPiece.isDetaching ? lastHoldMouseX - selectedPiece.moveOffsetX :
-				selectedPiece.isMoving ? selectedPiece.stickToX
+				selectedPiece.isMoving ? selectedPiece.stickToXFrom + selectedPiece.stickToX
 					: selectedPiece.x;
 			const y = selectedPiece.isDetaching ? lastHoldMouseY - selectedPiece.moveOffsetY :
-				selectedPiece.isMoving ? selectedPiece.stickToY
+				selectedPiece.isMoving ? selectedPiece.stickToYFrom + selectedPiece.stickToY
 					: selectedPiece.y;
 			if (findPointToStick(x, y, stickThreshold, selectedPiece, true)) {
 				let invalidPosition = false;
@@ -384,8 +384,7 @@ function Piece(x, y, w, h, id, shape, image) {
 	 * @param {number} [rotateIndex]
 	 */
 	function pieceRotate(piece, rotateIndex) {
-		console.log('piece rotate');
-
+		// console.log('piece rotate');
 
 		const step = rotateIndex !== undefined ? rotateIndex - piece.rotateIndex : 1;
 		piece.rotateFromAngle = piece.rotateIndex * Math.PI * 0.5;
@@ -403,18 +402,12 @@ function Piece(x, y, w, h, id, shape, image) {
 		piece.rotateStartTime = window.performance.now();
 
 		// Change offset
-		const orgX = piece.x, orgY = piece.y;
 		piece.x += (orgW - piece.w) * 0.5;
 		piece.y += (orgH - piece.h) * 0.5;
 		if (stickToMouse) {
 			piece.moveOffsetX -= (orgW - piece.w) * 0.5;
 			piece.moveOffsetY -= (orgH - piece.h) * 0.5;
 		}
-
-		// if (rotateIndex !== undefined) {
-		// piece.isMoving = false;
-		// pieceStick(orgX, orgY, piece);
-		// }
 	}
 
 	/**
