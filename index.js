@@ -1,7 +1,8 @@
 'use strict';
-const canvasElement = document.createElement('canvas');
-const canvas = canvasElement.getContext('2d');
-const tilesSize = 64;
+const mainCanvasElement = document.createElement('canvas');
+mainCanvasElement.className = 'mainCanvas';
+const tilesGap = 3;
+const tilesSize = 64; // With gap
 const rotateTime = 1 / 200;
 const stickToGridTime = 1 / 200;
 const stickThreshold = 33;
@@ -54,19 +55,86 @@ function Piece(x, y, w, h, id, shape, image) {
 	this.stickToY = -1;
 }
 
-// Main
 (function () {
-	const gridCanvasElement = document.createElement('canvas');
-	const gridBGCanvasElement = document.createElement('canvas');
-	const backgroundCanvasElement = document.createElement('canvas');
-	let needRefresh = true;
+	// Page and Menu
+	let inGame = false;
+	window.onload = function () {
+		const topDomElement = document.getElementById('domOverlay');
+		document.body.insertBefore(mainCanvasElement, topDomElement);
+		const mainMenu = document.getElementById('mainMenu');
+		const playButton = document.getElementById('playButton');
+		const optionsButton = document.getElementById('optionsButton');
 
-	const tilesGap = 3;
-	const tilesCountX = 3, tilesCountY = 3;
-	const gridPoints = [];
+		const inGameMenu = document.getElementById('inGame');
+
+		playButton.onclick = function () {
+			inGame = true;
+			mainMenu.className = 'hide';
+			initScene();
+			inGameMenu.className = '';
+		}
+
+		// playButton.click();
+	}
+
+	// Main canvas
+	const mainCanvas = mainCanvasElement.getContext('2d');
+	const backgroundCanvasElement = document.createElement('canvas');
+	let needRefresh = false;
+	requestAnimationFrame(renderScene);
+	window.addEventListener('resize', resizeCanvas);
+	resizeCanvas();
+
+	// Init resources
+	const resources = {
+		gridBGImage: './res/grid_bg.png',
+		piecesImage: [
+			'./res/shoto_1x1.png',
+			'./res/shoto_1x1_1.png',
+			'./res/shoto_1x1_2.png',
+			'./res/shoto_2x1.png',
+			'./res/shoto_2x2.png',
+			'./res/shoto_2x3.png',
+			'./res/shoto_3x1.png',
+			'./res/shoto_3x2.png',
+			'./res/shoto_3x3.png',
+		]
+	};
+	console.time('Resources loaded');
+	console.time('Image loaded');
+	loadResources(resources, function (progress) {
+		console.log(progress);
+	}, function () {
+		console.timeEnd('Image loaded');
+		processGridBackgroundImage(resources.gridBGImage);
+		console.timeEnd('Resources loaded');
+		// initScene();
+	});
+	const piecesShape = [
+		[1, 1, [0]],
+		[1, 1, [0]],
+		[1, 1, [0]],
+		[2, 1, [0, 1]],
+		[2, 2, [0, 1, 2, 3]],
+		[2, 3, [0, 1, 2, 3, 4, 5]],
+		[3, 1, [0, 1, 2]],
+		[3, 2, [0, 1, 2, 3, 5]],
+		[3, 3, [0, 1, 2, 3, 4, 5, 6, 7, 8]],
+	];
+
+
+	// Scene
+	const grid = {
+		canvasElement: document.createElement('canvas'),
+		bgCanvasElement: document.createElement('canvas'),
+		tilesCountX: 0,
+		tilesCountY: 0,
+		anchorPoints: [],
+	}
 	let gridTileFilled;
 	let gridTilesLeft;
-
+	/**@type Piece[]*/
+	const pieces = [];
 	/**@type Piece*/
 	let selectedPiece = null;
 	let stickToMouse = false;
@@ -166,7 +234,7 @@ function Piece(x, y, w, h, id, shape, image) {
 		}
 	});
 
-	window.addEventListener('contextmenu', (e) => {
+	window.addEventListener('contextmenu', function (e) {
 		e.preventDefault();
 
 		// Click ones
@@ -175,54 +243,10 @@ function Piece(x, y, w, h, id, shape, image) {
 		}
 	});
 
-	const piecesImage = [
-		'./res/shoto_1x1.png',
-		'./res/shoto_1x1_1.png',
-		'./res/shoto_1x1_2.png',
-		'./res/shoto_2x1.png',
-		'./res/shoto_2x2.png',
-		'./res/shoto_2x3.png',
-		'./res/shoto_3x1.png',
-		'./res/shoto_3x2.png',
-		'./res/shoto_3x3.png',
-	];
-	const piecesShape = [
-		[1, 1, [0]],
-		[1, 1, [0]],
-		[1, 1, [0]],
-		[2, 1, [0, 1]],
-		[2, 2, [0, 1, 2, 3]],
-		[2, 3, [0, 1, 2, 3, 4, 5]],
-		[3, 1, [0, 1, 2]],
-		[3, 2, [0, 1, 2, 3, 5]],
-		[3, 3, [0, 1, 2, 3, 4, 5, 6, 7, 8]],
-	];
-	const sceneImage = {gridBGImage: './res/grid_bg.png'};
-	let imageLoadTaskCount = 2;
-	loadImages(sceneImage, function (progress) {
-		console.log(progress);
-	}, onImagesLoad);
-	loadImages(piecesImage, function (progress) {
-		console.log(progress);
-	}, onImagesLoad);
-	/**@type Piece[]*/
-	const pieces = [];
-
-	function onImagesLoad() {
-		if (--imageLoadTaskCount !== 0) return;
-		console.log('Image resources loaded');
-		initScene();
-	}
-
-	resizeCanvas();
-	requestAnimationFrame(renderScene);
-	window.addEventListener('resize', resizeCanvas);
-	document.body.appendChild(canvasElement);
 
 	// Functions
 	function initScene() {
-		initGridBackground(sceneImage.gridBGImage);
-		initGrid();
+		initGrid(5, 5);
 		initPiece();
 		needRefresh = true;
 	}
@@ -235,25 +259,26 @@ function Piece(x, y, w, h, id, shape, image) {
 		if (needRefresh) {
 			needRefresh = false;
 
-			canvas.clearRect(0, 0, canvasElement.width, canvasElement.height);
-			canvas.drawImage(backgroundCanvasElement, 0, 0);
-			renderGridBackground();
-			renderGrid();
-			renderPieces();
-
-			canvas.fillStyle = '#F00';
-			canvas.fillRect(0, 0, 10, 10);
+			mainCanvas.clearRect(0, 0, mainCanvasElement.width, mainCanvasElement.height);
+			mainCanvas.drawImage(backgroundCanvasElement, 0, 0);
+			if (inGame) {
+				renderGrid();
+				renderPieces();
+			}
+			mainCanvas.fillStyle = '#F00';
+			mainCanvas.fillRect(0, 0, 10, 10);
 		} else
-			canvas.clearRect(0, 0, 10, 10);
+			mainCanvas.clearRect(0, 0, 10, 10);
 
 		requestAnimationFrame(renderScene);
 	}
 
 	function resizeCanvas() {
-		backgroundCanvasElement.width = canvasElement.width = window.innerWidth;
-		backgroundCanvasElement.height = canvasElement.height = window.innerHeight;
+		console.log('Resize Canvas');
+		backgroundCanvasElement.width = mainCanvasElement.width = window.innerWidth;
+		backgroundCanvasElement.height = mainCanvasElement.height = window.innerHeight;
 		initBackground();
-		calculateGridPoints();
+		calculateAnchorPoints();
 		needRefresh = true;
 	}
 
@@ -267,7 +292,7 @@ function Piece(x, y, w, h, id, shape, image) {
 			if (selectedPiece.isStickToGrid && orgGridOffset !== -1) {
 				for (let i = 0; i < selectedPiece.shape[2].length; i++) {
 					const [pieceOffsetX, pieceOffsetY] = pieceCastRotation(selectedPiece, selectedPiece.rotateIndexOnGrid, i);
-					const offset = orgGridOffset + pieceOffsetY * tilesCountX + pieceOffsetX;
+					const offset = orgGridOffset + pieceOffsetY * grid.tilesCountX + pieceOffsetX;
 					gridTileFilled[offset] = 0;
 				}
 			}
@@ -287,9 +312,9 @@ function Piece(x, y, w, h, id, shape, image) {
 					for (let i = 0; i < selectedPiece.shape[2].length; i++) {
 						const [pieceOffsetX, pieceOffsetY] = pieceCastRotation(selectedPiece, selectedPiece.rotateIndex, i);
 
-						const offset = selectedPiece.gridOffset + pieceOffsetY * tilesCountX + pieceOffsetX;
-						if (selectedPiece.gridOffset % tilesCountX + pieceOffsetX >= tilesCountX ||
-							(selectedPiece.gridOffset / tilesCountY | 0) + pieceOffsetY >= tilesCountY ||
+						const offset = selectedPiece.gridOffset + pieceOffsetY * grid.tilesCountX + pieceOffsetX;
+						if (selectedPiece.gridOffset % grid.tilesCountX + pieceOffsetX >= grid.tilesCountX ||
+							(selectedPiece.gridOffset / grid.tilesCountY | 0) + pieceOffsetY >= grid.tilesCountY ||
 							gridTileFilled[offset] !== 0
 						) {
 							newPositionValid = false;
@@ -306,7 +331,7 @@ function Piece(x, y, w, h, id, shape, image) {
 							gridTilesLeft -= selectedPiece.shape[2].length;
 						for (let i = 0; i < selectedPiece.shape[2].length; i++) {
 							const [pieceOffsetX, pieceOffsetY] = pieceCastRotation(selectedPiece, selectedPiece.rotateIndex, i);
-							const offset = selectedPiece.gridOffset + pieceOffsetY * tilesCountX + pieceOffsetX;
+							const offset = selectedPiece.gridOffset + pieceOffsetY * grid.tilesCountX + pieceOffsetX;
 							gridTileFilled[offset] = 1;
 						}
 						// console.log('can stick');
@@ -332,7 +357,7 @@ function Piece(x, y, w, h, id, shape, image) {
 						// Write piece to original place
 						for (let i = 0; i < selectedPiece.shape[2].length; i++) {
 							const [pieceOffsetX, pieceOffsetY] = pieceCastRotation(selectedPiece, selectedPiece.rotateIndexOnGrid, i);
-							gridTileFilled[selectedPiece.gridOffset + pieceOffsetY * tilesCountX + pieceOffsetX] = 1;
+							gridTileFilled[selectedPiece.gridOffset + pieceOffsetY * grid.tilesCountX + pieceOffsetX] = 1;
 						}
 					}
 				}
@@ -343,9 +368,9 @@ function Piece(x, y, w, h, id, shape, image) {
 			}
 
 			let result = '';
-			for (let i = 0; i < tilesCountY; i++) {
-				for (let j = 0; j < tilesCountX; j++)
-					result += gridTileFilled[i * tilesCountX + j] + ' ';
+			for (let i = 0; i < grid.tilesCountY; i++) {
+				for (let j = 0; j < grid.tilesCountX; j++)
+					result += gridTileFilled[i * grid.tilesCountX + j] + ' ';
 				result += '\n';
 			}
 			console.log(result);
@@ -429,7 +454,7 @@ function Piece(x, y, w, h, id, shape, image) {
 
 	function findPointToStick(positionX, positionY, threshold, piece, setOffset) {
 		let i = 0;
-		for (const gridPoint of gridPoints) {
+		for (const gridPoint of grid.anchorPoints) {
 			let addX = false, addY = false;
 			if (
 				Math.abs(positionX - gridPoint[0]) < threshold && Math.abs(positionY - gridPoint[1]) < threshold ||
@@ -459,14 +484,14 @@ function Piece(x, y, w, h, id, shape, image) {
 		return false;
 	}
 
-	function initGridBackground(gridBGImage) {
-		console.time('Init Grid BG');
-		const backgroundColor = 0xF4E7DF;
-		gridBGCanvasElement.width = gridBGImage.width;
-		gridBGCanvasElement.height = gridBGImage.height;
-		const gridBGCanvas = gridBGCanvasElement.getContext('2d');
-		gridBGCanvas.drawImage(gridBGImage, 0, 0, gridBGCanvasElement.width, gridBGCanvasElement.height);
-		const imageData = gridBGCanvas.getImageData(0, 0, gridBGCanvasElement.width, gridBGCanvasElement.height);
+	function processGridBackgroundImage(gridBGImage) {
+		console.time('Process grid background');
+		const backgroundColor = 0xDBCEC6;
+		const width = grid.bgCanvasElement.width = gridBGImage.width;
+		const height = grid.bgCanvasElement.height = gridBGImage.height;
+		const gridBGCanvas = grid.bgCanvasElement.getContext('2d');
+		gridBGCanvas.drawImage(gridBGImage, 0, 0, width, height);
+		const imageData = gridBGCanvas.getImageData(0, 0, width, height);
 		const data = imageData.data;
 		for (let i = 0; i < data.length; i += 4) {
 			if (data[i] === 0 && data[i + 1] === 0 && data[i + 2] === 0 && data[i + 3] !== 0) {
@@ -476,79 +501,76 @@ function Piece(x, y, w, h, id, shape, image) {
 			}
 		}
 		gridBGCanvas.putImageData(imageData, 0, 0);
-		console.timeEnd('Init Grid BG');
+		console.timeEnd('Process grid background');
 	}
 
-	function renderGridBackground() {
-		const size = Math.min(canvasElement.width, canvasElement.height) - 300;
-		canvas.drawImage(gridBGCanvasElement,
-			(canvasElement.width - size) * 0.5, (canvasElement.height - size) * 0.5,
-			size, size);
-	}
-
-	function initGrid() {
-		const totalWidth = tilesCountX * tilesSize;
-		const totalHeight = tilesCountY * tilesSize;
-		gridCanvasElement.width = totalWidth;
-		gridCanvasElement.height = totalHeight;
-		gridTileFilled = new Uint8Array(tilesCountX * tilesCountY);
+	function initGrid(tilesCountX, tilesCountY) {
+		grid.tilesCountX = tilesCountX;
+		grid.tilesCountY = tilesCountY;
+		const totalWidth = grid.canvasElement.width = tilesCountX * tilesSize;
+		const totalHeight = grid.canvasElement.height = tilesCountY * tilesSize;
 		gridTilesLeft = tilesCountX * tilesCountY;
-		const canvas = gridCanvasElement.getContext('2d');
-		const canvasOffsetX = (canvasElement.width - gridCanvasElement.width) * 0.5,
-			canvasOffsetY = (canvasElement.height - gridCanvasElement.height) * 0.5;
-		gridPoints.length = 0;
+		gridTileFilled = new Uint8Array(gridTilesLeft);
+		const canvas = grid.canvasElement.getContext('2d');
+		const canvasOffsetX = (mainCanvasElement.width - totalWidth) * 0.5,
+			canvasOffsetY = (mainCanvasElement.height - totalHeight) * 0.5;
+		grid.anchorPoints.length = 0;
 		canvas.fillStyle = '#C6B0A3';
-		for (let i = 0; i < 3; i++) {
-			for (let j = 0; j < 3; j++) {
+		for (let i = 0; i < tilesCountY; i++) {
+			for (let j = 0; j < tilesCountX; j++) {
 				const x = tilesSize * j, y = tilesSize * i;
-				gridPoints.push([x + canvasOffsetX, y + canvasOffsetY]);
+				grid.anchorPoints.push([x + canvasOffsetX, y + canvasOffsetY]);
 				// Draw tiles
 				canvas.fillRect(x + tilesGap, y + tilesGap, tilesSize - tilesGap * 2, tilesSize - tilesGap * 2);
 			}
 		}
 	}
 
-	function calculateGridPoints() {
-		const canvasOffsetX = (canvasElement.width - gridCanvasElement.width) * 0.5,
-			canvasOffsetY = (canvasElement.height - gridCanvasElement.height) * 0.5;
-		gridPoints.length = 0;
-		for (let i = 0; i < 3; i++) {
-			for (let j = 0; j < 3; j++) {
-				const x = tilesSize * j, y = tilesSize * i;
-				gridPoints.push([x + canvasOffsetX, y + canvasOffsetY]);
-			}
-		}
-	}
-
-	function renderGrid() {
-		canvas.drawImage(gridCanvasElement,
-			(canvasElement.width - gridCanvasElement.width) * 0.5,
-			(canvasElement.height - gridCanvasElement.height) * 0.5);
-	}
-
 	function initPiece() {
-		if (imageLoadTaskCount !== 0) return;
-
 		const gap = 10;
 		const margin = 50;
 		let x = margin, y = margin;
 		let lineMaxH = 0;
 		// create piece
-		for (let i = 0; i < piecesImage.length; i++) {
+		for (let i = 0; i < resources.piecesImage.length; i++) {
 			const w = piecesShape[i][0] * tilesSize, h = piecesShape[i][1] * tilesSize;
 			// new line
-			if (x + w > canvasElement.width - margin) {
+			if (x + w > mainCanvasElement.width - margin) {
 				x = margin;
 				y += lineMaxH + gap;
 				lineMaxH = 0;
 			}
 			// create piece
-			pieces[i] = new Piece(x, y, w, h, i, piecesShape[i], piecesImage[i]);
+			pieces[i] = new Piece(x, y, w, h, i, piecesShape[i], resources.piecesImage[i]);
 
 			if (h > lineMaxH)
 				lineMaxH = h;
 			x += w + gap;
 		}
+	}
+
+	function calculateAnchorPoints() {
+		if (!inGame) return;
+		const canvasOffsetX = (mainCanvasElement.width - grid.canvasElement.width) * 0.5,
+			canvasOffsetY = (mainCanvasElement.height - grid.canvasElement.height) * 0.5;
+		grid.anchorPoints.length = 0;
+		for (let i = 0; i < grid.tilesCountY; i++) {
+			for (let j = 0; j < grid.tilesCountX; j++) {
+				const x = tilesSize * j, y = tilesSize * i;
+				grid.anchorPoints.push([x + canvasOffsetX, y + canvasOffsetY]);
+			}
+		}
+	}
+
+	function renderGrid() {
+		const size = (Math.max(grid.tilesCountX, grid.tilesCountY) + 3) * tilesSize;
+		mainCanvas.drawImage(grid.bgCanvasElement,
+			(mainCanvasElement.width - size) * 0.5, (mainCanvasElement.height - size) * 0.5,
+			size, size);
+
+		mainCanvas.drawImage(grid.canvasElement,
+			(mainCanvasElement.width - grid.canvasElement.width) * 0.5,
+			(mainCanvasElement.height - grid.canvasElement.height) * 0.5);
 	}
 
 	function calculatePiecesMove() {
@@ -603,8 +625,8 @@ function Piece(x, y, w, h, id, shape, image) {
 	function renderPieces() {
 		for (let i = pieces.length - 1; i > -1; i--) {
 			const piece = pieces[i];
-			canvas.strokeStyle = 'red';
-			canvas.strokeRect(piece.x, piece.y, piece.w, piece.h);
+			mainCanvas.strokeStyle = 'red';
+			mainCanvas.strokeRect(piece.x, piece.y, piece.w, piece.h);
 
 			drawImage(piece.image, piece.rotateAngle,
 				piece.x + (piece.w - piece.originalW) * 0.5, piece.y + (piece.h - piece.originalH) * 0.5,
@@ -680,45 +702,42 @@ function Piece(x, y, w, h, id, shape, image) {
 	function drawImage(image, angel, x, y, w, h) {
 		if (angel !== 0) {
 			const wr = w * 0.5, hr = h * 0.5;
-			canvas.translate(x + wr, y + hr);
-			canvas.rotate(angel);
-			canvas.drawImage(image, -wr, -hr, w, h);
-			canvas.rotate(-angel);
-			canvas.translate(-x - wr, -y - hr);
+			mainCanvas.translate(x + wr, y + hr);
+			mainCanvas.rotate(angel);
+			mainCanvas.drawImage(image, -wr, -hr, w, h);
+			mainCanvas.rotate(-angel);
+			mainCanvas.translate(-x - wr, -y - hr);
 		} else
-			canvas.drawImage(image, x, y, w, h);
+			mainCanvas.drawImage(image, x, y, w, h);
 	}
 
-	function loadImages(imagesToLoad, progress, onload) {
-		if (imagesToLoad instanceof Array) {
-			let imageLeft = imagesToLoad.length;
-			const total = 1 / imageLeft;
-			for (let i = 0; i < imagesToLoad.length; i++) {
-				const image = new Image();
-				image.src = imagesToLoad[i];
-				image.onload = function () {
-					imagesToLoad[i] = image;
-					if (--imageLeft === 0)
-						onload();
-					else
-						progress(1 - imageLeft * total);
-				};
+	function loadResources(imagesToLoad, progress, onload) {
+		const entries = Object.entries(imagesToLoad);
+		let imageLeft = 0;
+		for (const imageData of Object.values(imagesToLoad))
+			imageLeft += ((imageData instanceof Array) ? imageData.length : 1);
+		const total = 1 / imageLeft;
+
+		for (/**@type [string, string | Array]*/const imageData of entries) {
+			// Load each resource
+			const resource = imageData[1];
+			if (resource instanceof Array) {
+				const category = imagesToLoad[imageData[0]];
+				for (let i = 0; i < resource.length; i++)
+					loadImage(category, i, resource[i]);
+			} else {
+				loadImage(imagesToLoad, imageData[0], imageData[1]);
 			}
-		} else {
-			const entries = Object.entries(imagesToLoad);
-			let imageLeft = entries.length;
-			const total = 1 / imageLeft;
-			for (const imageData of entries) {
-				const image = new Image();
-				image.src = imageData[1];
-				image.onload = function () {
-					imagesToLoad[imageData[0]] = image;
-					if (--imageLeft === 0)
-						onload();
-					else
-						progress(1 - imageLeft * total);
-				};
-			}
+		}
+
+		function loadImage(dest, key, src) {
+			const image = new Image();
+			image.src = src;
+			image.onload = function () {
+				dest[key] = image;
+				if (--imageLeft === 0) onload();
+				else progress(1 - imageLeft * total);
+			};
 		}
 	}
 })();
