@@ -100,16 +100,6 @@ function Piece(x, y, w, h, id, shape, image) {
 			'./res/shoto_3x3.png',
 		]
 	};
-	console.time('Resources loaded');
-	console.time('Image loaded');
-	loadResources(resources, function (progress) {
-		console.log(progress);
-	}, function () {
-		console.timeEnd('Image loaded');
-		processGridBackgroundImage(resources.gridBGImage);
-		console.timeEnd('Resources loaded');
-		// initScene();
-	});
 	const piecesShape = [
 		[1, 1, [0]],
 		[1, 1, [0]],
@@ -121,6 +111,24 @@ function Piece(x, y, w, h, id, shape, image) {
 		[3, 2, [0, 1, 2, 3, 5]],
 		[3, 3, [0, 1, 2, 3, 4, 5, 6, 7, 8]],
 	];
+	/**@type Piece[]*/
+	const pieces = [];
+	// Load resources and process
+	console.time('Resources loaded');
+	console.time('Image loaded');
+	loadResources(resources, function (progress) {
+		console.log(progress);
+	}, function () {
+		console.timeEnd('Image loaded');
+		processPiece(pieces);
+		try {
+			processGridBackgroundImage(resources.gridBGImage);
+		} catch (e) {
+			console.error(e);
+		}
+		console.log(`Loaded ${pieces.length} pieces`);
+		console.timeEnd('Resources loaded');
+	});
 
 
 	// Scene
@@ -133,17 +141,84 @@ function Piece(x, y, w, h, id, shape, image) {
 	}
 	let gridTileFilled;
 	let gridTilesLeft;
-	/**@type Piece[]*/
-	const pieces = [];
 	/**@type Piece*/
 	let selectedPiece = null;
 	let stickToMouse = false;
 	let isMouseLeftDown = false;
+	let touchScreen = false;
 	let mouseX = 0, mouseY = 0;
 	let lastHoldMouseX = 0, lastHoldMouseY = 0;
-	window.addEventListener('mousemove', function (e) {
-		mouseX = e.pageX;
-		mouseY = e.pageY;
+	window.addEventListener('mousemove', movePiece);
+	window.addEventListener('touchmove', movePiece);
+
+
+	window.addEventListener('mousedown', selectPiece);
+	window.addEventListener('touchstart', selectPiece);
+
+	window.addEventListener('mouseup', unselectPiece);
+	window.addEventListener('touchend', unselectPiece);
+	window.addEventListener('touchcancel', unselectPiece);
+
+	window.addEventListener('contextmenu', function (e) {
+		e.preventDefault();
+
+		// Click ones
+		if (selectedPiece && (!selectedPiece.isStickToGrid || stickToMouse) && selectedPiece.rotateCount < 2 && selectedPiece.rotateCount++ === 0) {
+			pieceRotate(selectedPiece);
+		}
+	});
+
+
+	// Functions
+	function selectPiece(e) {
+		let leftClick;
+		if (e instanceof TouchEvent) {
+			mouseX = e.touches[0].pageX;
+			mouseY = e.touches[0].pageY;
+			leftClick = true;
+			touchScreen = true;
+		} else {
+			mouseX = e.pageX;
+			mouseY = e.pageY;
+			if (e.button === 0)
+				leftClick = true;
+		}
+		if (!leftClick) return;
+		isMouseLeftDown = true;
+
+		// Find and grab piece
+		let i = 0;
+		for (const piece of pieces) {
+			if (mouseX > piece.x && mouseX < piece.x + piece.w &&
+				mouseY > piece.y && mouseY < piece.y + piece.h) {
+				selectedPiece = piece;
+				break;
+			}
+			i++;
+		}
+		if (i !== pieces.length) {
+			selectedPiece.moveOffsetX = mouseX - selectedPiece.x;
+			selectedPiece.moveOffsetY = mouseY - selectedPiece.y;
+			if (leftClick) {
+				selectedPiece.startMoveX = selectedPiece.x;
+				selectedPiece.startMoveY = selectedPiece.y;
+				stickToMouse = true;
+			}
+
+			// To top layer
+			pieces.splice(i, 1);
+			pieces.splice(0, 0, selectedPiece);
+		}
+	}
+
+	function movePiece(e) {
+		if (e instanceof TouchEvent) {
+			mouseX = e.touches[0].pageX;
+			mouseY = e.touches[0].pageY;
+		} else {
+			mouseX = e.pageX;
+			mouseY = e.pageY;
+		}
 		if (isMouseLeftDown) {
 			lastHoldMouseX = mouseX;
 			lastHoldMouseY = mouseY;
@@ -193,61 +268,19 @@ function Piece(x, y, w, h, id, shape, image) {
 
 			needRefresh = true;
 		}
-	});
+	}
 
-	window.addEventListener('mousedown', function (e) {
-		mouseX = e.pageX;
-		mouseY = e.pageY;
-		if (e.button === 0)
-			isMouseLeftDown = true;
-
-		// Grab piece
-		let i = 0;
-		for (const piece of pieces) {
-			if (mouseX > piece.x && mouseX < piece.x + piece.w &&
-				mouseY > piece.y && mouseY < piece.y + piece.h) {
-				selectedPiece = piece;
-				break;
-			}
-			i++;
-		}
-		if (i !== pieces.length) {
-			selectedPiece.moveOffsetX = mouseX - selectedPiece.x;
-			selectedPiece.moveOffsetY = mouseY - selectedPiece.y;
-			if (e.button === 0) {
-				selectedPiece.startMoveX = selectedPiece.x;
-				selectedPiece.startMoveY = selectedPiece.y;
-				stickToMouse = true;
-			}
-
-			// To top layer
-			pieces.splice(i, 1);
-			pieces.splice(0, 0, selectedPiece);
-		}
-	});
-
-	window.addEventListener('mouseup', function (e) {
+	function unselectPiece(e) {
+		console.log(e, touchScreen)
 		// Left button up
-		if (e.button === 0) {
+		if (e.button === 0 && !touchScreen || e instanceof TouchEvent) {
 			isMouseLeftDown = false;
 			pieceRelease();
 		}
-	});
+	}
 
-	window.addEventListener('contextmenu', function (e) {
-		e.preventDefault();
-
-		// Click ones
-		if (selectedPiece && (!selectedPiece.isStickToGrid || stickToMouse) && selectedPiece.rotateCount < 2 && selectedPiece.rotateCount++ === 0) {
-			pieceRotate(selectedPiece);
-		}
-	});
-
-
-	// Functions
 	function initScene() {
 		initGrid(5, 5);
-		initPiece();
 		needRefresh = true;
 	}
 
@@ -504,6 +537,29 @@ function Piece(x, y, w, h, id, shape, image) {
 		console.timeEnd('Process grid background');
 	}
 
+	function processPiece(piecesData) {
+		const gap = 10;
+		const margin = 50;
+		let x = margin, y = margin;
+		let lineMaxH = 0;
+		// create piece
+		for (let i = 0; i < resources.piecesImage.length; i++) {
+			const w = piecesShape[i][0] * tilesSize, h = piecesShape[i][1] * tilesSize;
+			// new line
+			if (x + w > mainCanvasElement.width - margin) {
+				x = margin;
+				y += lineMaxH + gap;
+				lineMaxH = 0;
+			}
+			// create piece
+			piecesData[i] = new Piece(x, y, w, h, i, piecesShape[i], resources.piecesImage[i]);
+
+			if (h > lineMaxH)
+				lineMaxH = h;
+			x += w + gap;
+		}
+	}
+
 	function initGrid(tilesCountX, tilesCountY) {
 		grid.tilesCountX = tilesCountX;
 		grid.tilesCountY = tilesCountY;
@@ -523,29 +579,6 @@ function Piece(x, y, w, h, id, shape, image) {
 				// Draw tiles
 				canvas.fillRect(x + tilesGap, y + tilesGap, tilesSize - tilesGap * 2, tilesSize - tilesGap * 2);
 			}
-		}
-	}
-
-	function initPiece() {
-		const gap = 10;
-		const margin = 50;
-		let x = margin, y = margin;
-		let lineMaxH = 0;
-		// create piece
-		for (let i = 0; i < resources.piecesImage.length; i++) {
-			const w = piecesShape[i][0] * tilesSize, h = piecesShape[i][1] * tilesSize;
-			// new line
-			if (x + w > mainCanvasElement.width - margin) {
-				x = margin;
-				y += lineMaxH + gap;
-				lineMaxH = 0;
-			}
-			// create piece
-			pieces[i] = new Piece(x, y, w, h, i, piecesShape[i], resources.piecesImage[i]);
-
-			if (h > lineMaxH)
-				lineMaxH = h;
-			x += w + gap;
 		}
 	}
 
