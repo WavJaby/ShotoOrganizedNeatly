@@ -1,8 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-	<script src="index.js"></script>
-	<script src="gameControl.js"></script>
 	<meta charset="UTF-8">
 	<title>Shoto Organized Neatly</title>
 	<link href="style.css" rel="stylesheet">
@@ -12,15 +10,18 @@
 <div id="canvas"></div>
 <div id="domOverlay">
 	<div id="loading">
+		<div id="loading_progressBar"><div></div></div>
 	</div>
 	<div id="mainMenu" class="hide">
-		<button id="playButton">PLAY</button>
-		<button id="optionsButton">OPTIONS</button>
+		<button id="mainMenu_playBtn">PLAY</button>
+		<button id="mainMenu_optionsBtn">OPTIONS</button>
 	</div>
 	<div id="inGame" class="hide">
-		<button id="retryButton"></button>
+		<button id="inGame_retryBtn"></button>
+		<button id="inGame_nextLevelBtn"></button>
 	</div>
 </div>
-
+<script src="gameControl.js"></script>
+<script src="index.js"></script>
 </body>
 </html>
