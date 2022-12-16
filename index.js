@@ -1,4 +1,5 @@
 'use strict';
+logLoadingScript();
 const mainCanvasElement = document.createElement('canvas');
 mainCanvasElement.className = 'mainCanvas';
 const tilesGap = 3;
@@ -8,12 +9,17 @@ const stickToGridTime = 1 / 200;
 const stickThreshold = 33;
 const unStickThreshold = 32;
 
+const STATE = {
+	LOADING: 0,
+	MAIN_MENU: 1,
+	OPTION_MENU: 2,
+	IN_GAME: 3,
+};
+
 // For older browser
 if (!window.performance) window.performance = {now: Date.now};
 
 function Piece(x, y, w, h, id, shape, image) {
-	this.originalX = x;
-	this.originalY = y;
 	this.originalW = w;
 	this.originalH = h;
 	this.id = id;
@@ -55,9 +61,9 @@ function Piece(x, y, w, h, id, shape, image) {
 	this.stickToY = -1;
 }
 
-(function () {
+const App = (function () {
 	// Page and Menu
-	let inGame = false;
+	let state = STATE.LOADING;
 	window.onload = function () {
 		// Canvas
 		const canvasFolder = document.getElementById('canvas');
@@ -77,10 +83,11 @@ function Piece(x, y, w, h, id, shape, image) {
 
 			// initLevel(1, 3, [3]);
 			initLevel(5, 5, [5, 6, 7, 8]);
-			inGame = true;
+
+			state = STATE.IN_GAME;
 		}
 
-		// playButton.click();
+		playButton.click();
 	}
 
 	// Main canvas
@@ -114,7 +121,7 @@ function Piece(x, y, w, h, id, shape, image) {
 		[2, 1, [0, 1]],
 		[2, 2, [0, 1, 2, 3]],
 		[2, 3, [0, 1, 2, 3, 4, 5]],
-		[3, 2, [0, 1, 2, 3, 5]],
+		[3, 2, [0, 1, 2, 3, 4, 5]],
 		[3, 3, [0, 1, 2, 3, 4, 5, 6, 7, 8]],
 	];
 	/**@type Piece[]*/
@@ -144,12 +151,13 @@ function Piece(x, y, w, h, id, shape, image) {
 		bgCanvasSize: 0,
 		tilesCountX: 0,
 		tilesCountY: 0,
-		anchorPoints: [],
+		anchorPoints: null,
+		/**@type{Piece[]}*/
 		piecesForLevel: [],
 	}
 	let gridTileFilled;
 	let gridTilesLeft;
-	/**@type Piece*/
+	/**@type{Piece}*/
 	let selectedPiece = null;
 	let stickToMouse = false;
 	let isMouseLeftDown = false;
@@ -178,8 +186,12 @@ function Piece(x, y, w, h, id, shape, image) {
 
 
 	// Functions
+	/*
+	 * In gameControl functions
+	 */
 	function selectPiece(e) {
-		if (!inGame) return;
+		if (state !== STATE.IN_GAME) return;
+
 		// Touch screen
 		if (e instanceof TouchEvent) {
 			mouseX = e.touches[0].pageX;
@@ -221,7 +233,7 @@ function Piece(x, y, w, h, id, shape, image) {
 	}
 
 	function movePiece(e) {
-		if (!inGame) return;
+		if (state !== STATE.IN_GAME) return;
 
 		if (e instanceof TouchEvent) {
 			mouseX = e.touches[0].pageX;
@@ -282,7 +294,7 @@ function Piece(x, y, w, h, id, shape, image) {
 	}
 
 	function unselectPiece(e) {
-		if (!inGame) return;
+		if (state !== STATE.IN_GAME) return;
 
 		// Left button up
 		if (e instanceof MouseEvent && e.button === 0 || e instanceof TouchEvent) {
@@ -293,37 +305,6 @@ function Piece(x, y, w, h, id, shape, image) {
 			else
 				pieceRelease();
 		}
-	}
-
-	function renderScene() {
-		// Calculate
-		calculatePiecesMove();
-
-		// Rerender
-		if (needRefresh) {
-			needRefresh = false;
-
-			mainCanvas.clearRect(0, 0, mainCanvasElement.width, mainCanvasElement.height);
-			mainCanvas.drawImage(backgroundCanvasElement, 0, 0);
-			if (inGame) {
-				renderGrid();
-				renderPieces();
-			}
-			mainCanvas.fillStyle = '#F00';
-			mainCanvas.fillRect(0, 0, 10, 10);
-		} else
-			mainCanvas.clearRect(0, 0, 10, 10);
-
-		requestAnimationFrame(renderScene);
-	}
-
-	function resizeCanvas() {
-		console.log('Resize Canvas');
-		backgroundCanvasElement.width = mainCanvasElement.width = window.innerWidth;
-		backgroundCanvasElement.height = mainCanvasElement.height = window.innerHeight;
-		initBackground();
-		calculateAnchorPoints();
-		needRefresh = true;
 	}
 
 	function pieceRelease() {
@@ -395,6 +376,7 @@ function Piece(x, y, w, h, id, shape, image) {
 						pieceRotate(selectedPiece, selectedPiece.rotateIndexOnGrid);
 					}
 					// Move back
+					selectedPiece.isMoving = false;
 					pieceStick(selectedPiece.startMoveX, selectedPiece.startMoveY, selectedPiece);
 
 					if (orgGridOffset !== -1) {
@@ -496,22 +478,31 @@ function Piece(x, y, w, h, id, shape, image) {
 		}
 	}
 
+	/**
+	 * @param {int} positionX
+	 * @param {int} positionY
+	 * @param {int} threshold
+	 * @param {Piece} piece
+	 * @param {boolean} setOffset
+	 */
 	function findPointToStick(positionX, positionY, threshold, piece, setOffset) {
 		let i = 0;
-		for (const gridPoint of grid.anchorPoints) {
+		const len = grid.tilesCountX * grid.tilesCountY * 2;
+		for (let j = 0; j < len; j += 2) {
+			const x = grid.anchorPoints[j], y = grid.anchorPoints[j + 1];
 			let addX = false, addY = false;
 			if (
-				Math.abs(positionX - gridPoint[0]) < threshold && Math.abs(positionY - gridPoint[1]) < threshold ||
-				(addX = (Math.abs(positionX + piece.w - tilesSize - gridPoint[0]) < threshold)) && Math.abs(positionY - gridPoint[1]) < threshold ||
-				Math.abs(positionX - gridPoint[0]) < threshold && (addY = (Math.abs(positionY + piece.h - tilesSize - gridPoint[1]) < threshold)) ||
-				(addX = (Math.abs(positionX + piece.w - tilesSize - gridPoint[0]) < threshold)) && (addY = (Math.abs(positionY + piece.h - tilesSize - gridPoint[1]) < threshold))
+				Math.abs(positionX - x) < threshold && Math.abs(positionY - y) < threshold ||
+				(addX = (Math.abs(positionX + piece.w - tilesSize - x) < threshold)) && Math.abs(positionY - y) < threshold ||
+				Math.abs(positionX - x) < threshold && (addY = (Math.abs(positionY + piece.h - tilesSize - y) < threshold)) ||
+				(addX = (Math.abs(positionX + piece.w - tilesSize - x) < threshold)) && (addY = (Math.abs(positionY + piece.h - tilesSize - y) < threshold))
 			) {
 				if (setOffset)
 					piece.gridOffset = addX || addY ? -1 : i;
 
 				// Same point skip
-				const toX = addX ? gridPoint[0] - piece.w + tilesSize : gridPoint[0],
-					toY = addY ? gridPoint[1] - piece.h + tilesSize : gridPoint[1];
+				const toX = addX ? x - piece.w + tilesSize : x,
+					toY = addY ? y - piece.h + tilesSize : y;
 				if (toX === piece.x && toY === piece.y) {
 					// console.log('skip');
 					return true;
@@ -523,38 +514,10 @@ function Piece(x, y, w, h, id, shape, image) {
 			}
 			i++;
 		}
+
 		if (setOffset)
 			piece.gridOffset = -1;
 		return false;
-	}
-
-	function processGridBackgroundImage(gridBGImage) {
-		console.time('Process grid background');
-		const backgroundColor = 0xDBCEC6;
-		const width = grid.bgCanvasElement.width = gridBGImage.width;
-		const height = grid.bgCanvasElement.height = gridBGImage.height;
-		const gridBGCanvas = grid.bgCanvasElement.getContext('2d');
-		gridBGCanvas.drawImage(gridBGImage, 0, 0, width, height);
-		const imageData = gridBGCanvas.getImageData(0, 0, width, height);
-		const data = imageData.data;
-		for (let i = 0; i < data.length; i += 4) {
-			if (data[i] === 0 && data[i + 1] === 0 && data[i + 2] === 0 && data[i + 3] !== 0) {
-				data[i] = (backgroundColor >> 16) & 0xFF;
-				data[i + 1] = (backgroundColor >> 8) & 0xFF;
-				data[i + 2] = backgroundColor & 0xFF;
-			}
-		}
-		gridBGCanvas.putImageData(imageData, 0, 0);
-		console.timeEnd('Process grid background');
-	}
-
-	function processPiece(piecesData) {
-		// create piece
-		for (let i = 0; i < resources.piecesImage.length; i++) {
-			const w = piecesShape[i][0] * tilesSize, h = piecesShape[i][1] * tilesSize;
-			// create piece
-			piecesData[i] = new Piece(0, 0, w, h, i, piecesShape[i], resources.piecesImage[i]);
-		}
 	}
 
 	/**
@@ -569,22 +532,23 @@ function Piece(x, y, w, h, id, shape, image) {
 		const totalHeight = grid.canvasElement.height = tilesCountY * tilesSize;
 		gridTilesLeft = tilesCountX * tilesCountY;
 		gridTileFilled = new Uint8Array(gridTilesLeft);
-		grid.anchorPoints.length = 0;
 
 		const canvas = grid.canvasElement.getContext('2d');
 		const canvasOffsetX = (mainCanvasElement.width - totalWidth) * 0.5,
 			canvasOffsetY = (mainCanvasElement.height - totalHeight) * 0.5;
 		grid.bgCanvasSize = (Math.max(tilesCountX, tilesCountY) + 3) * tilesSize;
-		const bgCanvasOffsetX = (mainCanvasElement.width - grid.bgCanvasSize) * 0.5,
-			bgCanvasOffsetY = (mainCanvasElement.height - grid.bgCanvasSize) * 0.5;
+		const bgCanvasOffsetX = (mainCanvasElement.width - grid.bgCanvasSize) * 0.5;
 
 		canvas.fillStyle = '#C6B0A3';
 
 		// Draw tiles and set anchor
+		grid.anchorPoints = new Uint32Array(gridTilesLeft * 2);
+		let k = 0;
 		for (let i = 0; i < tilesCountY; i++) {
 			for (let j = 0; j < tilesCountX; j++) {
 				const x = tilesSize * j, y = tilesSize * i;
-				grid.anchorPoints.push([x + canvasOffsetX, y + canvasOffsetY]);
+				grid.anchorPoints[k++] = x + canvasOffsetX;
+				grid.anchorPoints[k++] = y + canvasOffsetY;
 				// Draw tiles
 				canvas.fillRect(x + tilesGap, y + tilesGap, tilesSize - tilesGap * 2, tilesSize - tilesGap * 2);
 			}
@@ -663,29 +627,9 @@ function Piece(x, y, w, h, id, shape, image) {
 		needRefresh = true;
 	}
 
-	function calculateAnchorPoints() {
-		if (!inGame) return;
-		const canvasOffsetX = (mainCanvasElement.width - grid.canvasElement.width) * 0.5,
-			canvasOffsetY = (mainCanvasElement.height - grid.canvasElement.height) * 0.5;
-		grid.anchorPoints.length = 0;
-		for (let i = 0; i < grid.tilesCountY; i++) {
-			for (let j = 0; j < grid.tilesCountX; j++) {
-				const x = tilesSize * j, y = tilesSize * i;
-				grid.anchorPoints.push([x + canvasOffsetX, y + canvasOffsetY]);
-			}
-		}
-	}
-
-	function renderGrid() {
-		mainCanvas.drawImage(grid.bgCanvasElement,
-			(mainCanvasElement.width - grid.bgCanvasSize) * 0.5, (mainCanvasElement.height - grid.bgCanvasSize) * 0.5,
-			grid.bgCanvasSize, grid.bgCanvasSize);
-
-		mainCanvas.drawImage(grid.canvasElement,
-			(mainCanvasElement.width - grid.canvasElement.width) * 0.5,
-			(mainCanvasElement.height - grid.canvasElement.height) * 0.5);
-	}
-
+	/*
+	 * Canvas functions
+	 */
 	function calculatePiecesMove() {
 		for (/**@type Piece*/const piece of grid.piecesForLevel) {
 			// Rotate
@@ -735,6 +679,28 @@ function Piece(x, y, w, h, id, shape, image) {
 		}
 	}
 
+	function calculateAnchorPoints() {
+		const canvasOffsetX = (mainCanvasElement.width - grid.canvasElement.width) * 0.5,
+			canvasOffsetY = (mainCanvasElement.height - grid.canvasElement.height) * 0.5;
+
+		grid.anchorPoints = new Uint32Array(gridTilesLeft * 2);
+		let k = 0;
+		for (let i = 0; i < grid.tilesCountY; i++) {
+			for (let j = 0; j < grid.tilesCountX; j++) {
+				grid.anchorPoints[k++] = tilesSize * j + canvasOffsetX;
+				grid.anchorPoints[k++] = tilesSize * i + canvasOffsetY;
+			}
+		}
+
+		for (const piece of grid.piecesForLevel) {
+			if (piece.isStickToGrid) {
+				const offset = piece.gridOffset * 2;
+				piece.x = grid.anchorPoints[offset];
+				piece.y = grid.anchorPoints[offset + 1];
+			}
+		}
+	}
+
 	function renderPieces() {
 		for (let i = grid.piecesForLevel.length - 1; i > -1; i--) {
 			const piece = grid.piecesForLevel[i];
@@ -745,6 +711,55 @@ function Piece(x, y, w, h, id, shape, image) {
 				piece.x + (piece.w - piece.originalW) * 0.5, piece.y + (piece.h - piece.originalH) * 0.5,
 				piece.originalW, piece.originalH);
 		}
+	}
+
+	function renderScene() {
+		// Calculate
+		calculatePiecesMove();
+
+		// Rerender
+		if (needRefresh) {
+			needRefresh = false;
+
+			// Clear canvas
+			mainCanvas.clearRect(0, 0, mainCanvasElement.width, mainCanvasElement.height);
+			// Render background
+			mainCanvas.drawImage(backgroundCanvasElement, 0, 0)
+
+			if (state === STATE.IN_GAME) {
+				renderGrid();
+				renderPieces();
+			}
+
+			mainCanvas.fillStyle = '#F00';
+			mainCanvas.fillRect(0, 0, 10, 10);
+		} else
+			mainCanvas.clearRect(0, 0, 10, 10);
+
+		requestAnimationFrame(renderScene);
+	}
+
+	function renderGrid() {
+		mainCanvas.drawImage(grid.bgCanvasElement,
+			(mainCanvasElement.width - grid.bgCanvasSize) * 0.5, (mainCanvasElement.height - grid.bgCanvasSize) * 0.5,
+			grid.bgCanvasSize, grid.bgCanvasSize);
+
+		mainCanvas.drawImage(grid.canvasElement,
+			(mainCanvasElement.width - grid.canvasElement.width) * 0.5,
+			(mainCanvasElement.height - grid.canvasElement.height) * 0.5);
+	}
+
+	function resizeCanvas() {
+		console.log('Resize Canvas');
+		backgroundCanvasElement.width = mainCanvasElement.width = window.innerWidth;
+		backgroundCanvasElement.height = mainCanvasElement.height = window.innerHeight;
+		initBackground();
+
+		// Recalculate anchor points
+		if (state === STATE.IN_GAME)
+			calculateAnchorPoints();
+
+		needRefresh = true;
 	}
 
 	function initBackground() {
@@ -808,6 +823,41 @@ function Piece(x, y, w, h, id, shape, image) {
 		}
 	}
 
+	/*
+	 * Loading functions
+	 */
+	function processGridBackgroundImage(gridBGImage) {
+		console.time('Process grid background');
+		const backgroundColor = 0xDBCEC6;
+		const width = grid.bgCanvasElement.width = gridBGImage.width;
+		const height = grid.bgCanvasElement.height = gridBGImage.height;
+		const gridBGCanvas = grid.bgCanvasElement.getContext('2d');
+		gridBGCanvas.drawImage(gridBGImage, 0, 0, width, height);
+		const imageData = gridBGCanvas.getImageData(0, 0, width, height);
+		const data = imageData.data;
+		for (let i = 0; i < data.length; i += 4) {
+			if (data[i] === 0 && data[i + 1] === 0 && data[i + 2] === 0 && data[i + 3] !== 0) {
+				data[i] = (backgroundColor >> 16) & 0xFF;
+				data[i + 1] = (backgroundColor >> 8) & 0xFF;
+				data[i + 2] = backgroundColor & 0xFF;
+			}
+		}
+		gridBGCanvas.putImageData(imageData, 0, 0);
+		console.timeEnd('Process grid background');
+	}
+
+	function processPiece(piecesData) {
+		// create piece
+		for (let i = 0; i < resources.piecesImage.length; i++) {
+			const w = piecesShape[i][0] * tilesSize, h = piecesShape[i][1] * tilesSize;
+			// create piece
+			piecesData[i] = new Piece(0, 0, w, h, i, piecesShape[i], resources.piecesImage[i]);
+		}
+	}
+
+	/*
+	 * Utils
+	 */
 	function easeInOut(t) {
 		return t * t * (3 - 2 * t);
 	}
@@ -853,4 +903,16 @@ function Piece(x, y, w, h, id, shape, image) {
 			};
 		}
 	}
+
+	return {
+
+	};
 })();
+
+// Debug
+function logLoadingScript() {
+	const scripts = document.getElementsByTagName('script');
+	const lastScript = scripts[scripts.length - 1];
+	const start = lastScript.src.lastIndexOf('/');
+	console.log(`Loading ${start !== -1 ? lastScript.src.slice(start + 1) : lastScript.src}`)
+}
