@@ -7,37 +7,56 @@ if (!window.performance) window.performance = {now: Date.now};
 	// Canvas folder
 	const canvasFolder = document.getElementById('canvas');
 	const backgroundCanvasElement = document.createElement('canvas');
+	initBackground();
+	canvasFolder.appendChild(backgroundCanvasElement);
 
 	const pages = {
 		loading: document.getElementById('loading'),
 		mainMenu: document.getElementById('mainMenu'),
+		levels: document.getElementById('levels'),
 		inGame: document.getElementById('inGame'),
 	};
 	let currentPage = pages.loading;
 
 	// Progress bar
-	const progressBar = document.getElementById('loading_progressBar').firstChild;
+	const progressBar = document.getElementById('loading_progressBar').firstElementChild;
+
+	// Transition
+	const transition = document.getElementById('transition');
+	/**@type HTMLMediaElement*/
+	const transitionVideo = transition.firstElementChild;
+	transitionVideo.playbackRate = 1.5;
+	transitionVideo.onended = function () {
+		transition.classList.add('hide');
+	};
 
 	// Menu
+	const continueBtn = document.getElementById('mainMenu_continueBtn');
 	const playButton = document.getElementById('mainMenu_playBtn');
 	const optionsButton = document.getElementById('mainMenu_optionsBtn');
+	const mainMenu_exitBtn = document.getElementById('mainMenu_exitBtn');
 	playButton.onclick = function () {
-		changePage(pages.inGame);
-
-		// initLevel(1, 3, [3]);
-		gameControl.initLevel(5, 5, [5, 6, 7, 8]);
-		gameControl.setInGame(true);
+		playTransition(function () {
+			changePage(pages.levels);
+		});
 	}
+	mainMenu_exitBtn.onclick = function () {window.close();};
+
+	// In game
+	const levelName = document.getElementById('inGame_levelName');
 
 	// Game control
 	/**@type{GameControl}*/
 	const gameControl = new GameControl();
-	canvasFolder.appendChild(backgroundCanvasElement);
 	canvasFolder.appendChild(gameControl.mainCanvasElement);
-	initBackground();
-	requestAnimationFrame(render);
+	window.addEventListener('resize', windowResize);
 
-	// Init resources
+	// Levels
+	const levels = [
+		[1, 3, [3]],
+		[5, 5, [5, 6, 7, 8]],
+	];
+	// Resources
 	const resources = {
 		gridBGImage: './res/grid_bg.png',
 		piecesImage: [
@@ -69,15 +88,46 @@ if (!window.performance) window.performance = {now: Date.now};
 		gameControl.initResources(resources);
 		console.log(`Loaded ${resources.piecesImage.length} pieces`);
 
+		// Generate levels
+		const table = document.createElement('table');
+		table.className = 'center';
+		pages.levels.appendChild(table);
+		const tbody = table.createTBody();
+		let levelCount = 0;
+		for (let i = 0; i < 5; i++) {
+			const tableRow = tbody.insertRow();
+			for (let j = 0; j < 5; j++) {
+				const tableCell = tableRow.insertCell();
+				const level = levelCount++;
+				const name = (level + 1).toString();
+				tableCell.textContent = name;
+				tableCell.onclick = function () {
+					levelName.textContent = 'LEVEL ' + name;
+					gameControl.initLevel(levels[level]);
+					playTransition(function () {
+						gameControl.setInGame(true);
+						changePage(pages.inGame);
+					});
+				}
+			}
+		}
+
 		// Done!
 		console.timeEnd('Resources loaded');
 		progressBar.style.width = '100%';
+
+		// Start render
+		requestAnimationFrame(render);
 	});
 
-	window.addEventListener('resize', windowResize);
-
-
 	// Functions
+	function playTransition(onEnded) {
+		transition.classList.remove('hide');
+		transitionVideo.play().then(function () {
+			setTimeout(onEnded, transitionVideo.duration * 500 * (1 / transitionVideo.playbackRate));
+		});
+	}
+
 	function render() {
 		gameControl.render();
 
@@ -91,8 +141,8 @@ if (!window.performance) window.performance = {now: Date.now};
 
 	function changePage(page) {
 		console.log(`Open page: ${page.id}`);
-		currentPage.className = 'hide';
-		(currentPage = page).className = '';
+		currentPage.classList.add('hide');
+		(currentPage = page).classList.remove('hide');
 	}
 
 	function initBackground() {
@@ -102,9 +152,9 @@ if (!window.performance) window.performance = {now: Date.now};
 		const canvas = backgroundCanvasElement.getContext('2d');
 		canvas.clearRect(0, 0, width, height);
 		canvas.drawImage(backgroundCanvasElement, 0, 0);
-		canvas.lineWidth = 7;
+		canvas.lineWidth = 3;
 		canvas.lineJoin = 'round';
-		canvas.strokeStyle = '#9A664E';
+		canvas.strokeStyle = '#732819';
 
 		const margin = 20;
 		const changeForwardMin = 15, changeForwardMax = 30;

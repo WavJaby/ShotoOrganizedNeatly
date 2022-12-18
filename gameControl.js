@@ -130,15 +130,11 @@ function GameControl() {
 		mainCanvasRefresh = true;
 	}
 
-	/**
-	 * @param {int} tilesCountX
-	 * @param {int} tilesCountY
-	 * @param {int[]} pieceIDs
-	 */
-	this.initLevel = function (tilesCountX, tilesCountY, pieceIDs) {
+	this.initLevel = function (levelSettings) {
 		resizeMainCanvas();
-		grid.tilesCountX = tilesCountX;
-		grid.tilesCountY = tilesCountY;
+		const pieceIDs = levelSettings[2];
+		const tilesCountX = grid.tilesCountX = levelSettings[0];
+		const tilesCountY = grid.tilesCountY = levelSettings[1];
 		const totalWidth = grid.canvasElement.width = tilesCountX * tilesSize;
 		const totalHeight = grid.canvasElement.height = tilesCountY * tilesSize;
 		gridTilesLeft = tilesCountX * tilesCountY;
@@ -167,8 +163,8 @@ function GameControl() {
 
 		// Add pieces for level
 		grid.piecesForLevel.length = pieceIDs.length;
-		const margin = 20;
-		let x = margin, ly = margin, ry = margin;
+		const padding = 50, margin = 20;
+		let x = padding, ly = 0, ry = 0;
 		let rawPieceStart = 0;
 		let leftLineMaxHeight = 0, rightLineMaxHeight = 0;
 		/** @type {Piece[]}*/
@@ -180,23 +176,8 @@ function GameControl() {
 			// const width = Math.max(piece.w, piece.h) + margin;
 			const width = piece.w + margin;
 
-			if (x + width > mainCanvasElement.width - margin) {
-				// Place Y
-				for (let j = rawPieceStart; j < i; j++) {
-					const piece = grid.piecesForLevel[j];
-					piece.y += (rightLineMaxHeight - piece.h) * 0.5;
-					piece.x += ((mainCanvasElement.width - margin) - x) * 0.5;
-				}
-				x = margin;
-				leftLine = true;
-				rawPieceStart = i;
-				// New line
-				ly += leftLineMaxHeight + margin;
-				ry += rightLineMaxHeight + margin;
-				rightLineMaxHeight = 0;
-				leftLineMaxHeight = 0;
-			} else if (leftLine && x + width > bgCanvasOffsetX) {
-				// Place Y
+			if (leftLine && x + width > bgCanvasOffsetX) {
+				// Center the pieces
 				for (let j = rawPieceStart; j < i; j++) {
 					const piece = grid.piecesForLevel[j];
 					piece.y += (leftLineMaxHeight - piece.h) * 0.5;
@@ -205,6 +186,21 @@ function GameControl() {
 				x = bgCanvasOffsetX + grid.bgCanvasSize;
 				leftLine = false;
 				rawPieceStart = i;
+			} else if (x + width > mainCanvasElement.width - padding) {
+				// Center the pieces
+				for (let j = rawPieceStart; j < i; j++) {
+					const piece = grid.piecesForLevel[j];
+					piece.y += (rightLineMaxHeight - piece.h) * 0.5;
+					piece.x += ((mainCanvasElement.width - margin) - x) * 0.5;
+				}
+				x = padding;
+				leftLine = true;
+				rawPieceStart = i;
+				// New line
+				ly += leftLineMaxHeight + margin;
+				ry += rightLineMaxHeight + margin;
+				rightLineMaxHeight = 0;
+				leftLineMaxHeight = 0;
 			}
 
 			// Update line height
@@ -225,6 +221,21 @@ function GameControl() {
 			if (i + 1 === pieceIDs.length) {
 				ly += leftLineMaxHeight + margin;
 				ry += rightLineMaxHeight + margin;
+			}
+		}
+
+		// Center last piece
+		if (leftLine) {
+			for (let j = rawPieceStart; j < pieceIDs.length; j++) {
+				const piece = grid.piecesForLevel[j];
+				piece.y += (leftLineMaxHeight - piece.h) * 0.5;
+				piece.x += (bgCanvasOffsetX - x) * 0.5;
+			}
+		} else {
+			for (let j = rawPieceStart; j < pieceIDs.length; j++) {
+				const piece = grid.piecesForLevel[j];
+				piece.y += (rightLineMaxHeight - piece.h) * 0.5;
+				piece.x += ((mainCanvasElement.width - margin) - x) * 0.5;
 			}
 		}
 
@@ -254,7 +265,15 @@ function GameControl() {
 			renderGrid();
 			renderPieces();
 
-			mainCanvas.fillStyle = '#F00';
+			// Debug
+			mainCanvas.fillStyle = mainCanvas.strokeStyle = '#F00';
+			const bgCanvasOffsetX = (mainCanvasElement.width - grid.bgCanvasSize) * 0.5;
+			mainCanvas.strokeRect(0, 0, bgCanvasOffsetX, mainCanvasElement.height);
+			mainCanvas.strokeRect(bgCanvasOffsetX + grid.bgCanvasSize, 0, bgCanvasOffsetX, mainCanvasElement.height);
+			for (let i = 0; i < grid.piecesForLevel.length; i++) {
+				const piece = grid.piecesForLevel[i];
+				mainCanvas.strokeRect(piece.x, piece.y, piece.w, piece.h);
+			}
 			mainCanvas.fillRect(0, 0, 10, 10);
 		} else
 			mainCanvas.clearRect(0, 0, 10, 10);
@@ -561,7 +580,7 @@ function GameControl() {
 	 * @param {int} positionY
 	 * @param {int} threshold
 	 * @param {Piece} piece
-	 * @param {boolean} setOffset
+	 * @param {boolean} [setOffset]
 	 */
 	function findPointToStick(positionX, positionY, threshold, piece, setOffset) {
 		let i = 0;
@@ -680,9 +699,6 @@ function GameControl() {
 	function renderPieces() {
 		for (let i = grid.piecesForLevel.length - 1; i > -1; i--) {
 			const piece = grid.piecesForLevel[i];
-			mainCanvas.strokeStyle = 'red';
-			mainCanvas.strokeRect(piece.x, piece.y, piece.w, piece.h);
-
 			drawImage(piece.image, piece.rotateAngle,
 				piece.x + (piece.w - piece.originalW) * 0.5, piece.y + (piece.h - piece.originalH) * 0.5,
 				piece.originalW, piece.originalH);

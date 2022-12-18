@@ -10,15 +10,30 @@
 <div id="canvas"></div>
 <div id="domOverlay">
 	<div id="loading">
-		<div id="loading_progressBar"><div></div></div>
+		<div id="loading_progressBar" class="center">
+			<div></div>
+		</div>
 	</div>
-	<div id="mainMenu" class="hide">
-		<button id="mainMenu_playBtn">PLAY</button>
-		<button id="mainMenu_optionsBtn">OPTIONS</button>
+	<div id="mainMenu" class="hide noSelect">
+		<div class="center">
+			<button id="mainMenu_continueBtn">CONTINUE</button>
+			<button id="mainMenu_playBtn">PLAY</button>
+			<button id="mainMenu_optionsBtn">OPTIONS</button>
+			<button id="mainMenu_exitBtn">EXIT</button>
+		</div>
 	</div>
+	<div id="levels" class="hide noSelect"></div>
 	<div id="inGame" class="hide">
+		<h1 id="inGame_levelName" class="noSelect"></h1>
+		<button id="inGame_backBtn"></button>
 		<button id="inGame_retryBtn"></button>
 		<button id="inGame_nextLevelBtn"></button>
+	</div>
+
+	<div id="transition" class="hide">
+		<video>
+			<source src="res/shotoTransition.webm" type="video/webm"/>
+		</video>
 	</div>
 </div>
 <script src="gameControl.js"></script>
