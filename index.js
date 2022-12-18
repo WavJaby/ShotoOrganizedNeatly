@@ -19,31 +19,25 @@ if (!window.performance) window.performance = {now: Date.now};
 	let currentPage = pages.loading;
 
 	// Progress bar
-	const progressBar = document.getElementById('loading_progressBar').firstElementChild;
+	const progressBar = new Progressbar(document.getElementById('loading_progressBar').firstElementChild);
 
 	// Transition
 	const transition = document.getElementById('transition');
-	/**@type HTMLMediaElement*/
-	const transitionVideo = transition.firstElementChild;
-	transitionVideo.playbackRate = 1.5;
-	transitionVideo.onended = function () {
-		transition.classList.add('hide');
-	};
+	const transitionVideo = document.createElement('video');
+	transition.appendChild(transitionVideo);
+	transitionVideo.onended = function () {transition.classList.add('hide');};
 
 	// Menu
 	const continueBtn = document.getElementById('mainMenu_continueBtn');
 	const playButton = document.getElementById('mainMenu_playBtn');
 	const optionsButton = document.getElementById('mainMenu_optionsBtn');
 	const mainMenu_exitBtn = document.getElementById('mainMenu_exitBtn');
-	playButton.onclick = function () {
-		playTransition(function () {
-			changePage(pages.levels);
-		});
-	}
+	playButton.onclick = function () {changePage(pages.levels);}
 	mainMenu_exitBtn.onclick = function () {window.close();};
 
 	// In game
 	const levelName = document.getElementById('inGame_levelName');
+
 
 	// Game control
 	/**@type{GameControl}*/
@@ -54,6 +48,7 @@ if (!window.performance) window.performance = {now: Date.now};
 	// Levels
 	const levels = [
 		[1, 3, [3]],
+		[3, 1, [3]],
 		[5, 5, [5, 6, 7, 8]],
 	];
 	// Resources
@@ -74,19 +69,24 @@ if (!window.performance) window.performance = {now: Date.now};
 	// Load resources and process
 	console.time('Resources loaded');
 	console.time('Image loaded');
-	loadResources(resources, function (progress) {
-		progressBar.style.width = (progress * 100) + '%';
-	}, function () {
+	const resourcesLoadState = {ratio: 50, progress: 0};
+	const transitionVideoLoadState = {ratio: 50, progress: 0};
+	loadVideo(transitionVideo, 'res/shotoTransition.webm', transitionVideoLoadState);
+	loadImageResources(resources, resourcesLoadState);
+
+	// On resources loaded
+	progressBar.onload = async function () {
 		console.timeEnd('Image loaded');
 
 		// Load font
-		document.fonts.load('1em Just Another Hand').then(function () {
-			changePage(pages.mainMenu);
-		});
+		await document.fonts.load('1em Just Another Hand');
 
 		// Init resources
 		gameControl.initResources(resources);
 		console.log(`Loaded ${resources.piecesImage.length} pieces`);
+
+		// Transition video
+		transitionVideo.playbackRate = 2;
 
 		// Generate levels
 		const table = document.createElement('table');
@@ -114,13 +114,47 @@ if (!window.performance) window.performance = {now: Date.now};
 
 		// Done!
 		console.timeEnd('Resources loaded');
-		progressBar.style.width = '100%';
 
 		// Start render
 		requestAnimationFrame(render);
-	});
+
+		changePage(pages.mainMenu);
+	};
 
 	// Functions
+	function Progressbar(progressBar) {
+		/**@type{{ratio: float, progress: float}[]}*/
+		const dataList = [];
+		let taskLeft = 0;
+
+		this.onload = null;
+
+		this.registerTask = function (data) {
+			data.id = dataList;
+			dataList.push(data);
+			taskLeft++;
+		}
+
+		this.progressDone = function (data) {
+			data.progress = 1;
+			if (--taskLeft > 0) {
+				let progress = 0;
+				for (const data of dataList) progress += data.progress * data.ratio;
+				progressBar.style.width = progress + '%';
+			} else {
+				progressBar.style.width = '100%';
+				setTimeout(this.onload, 100);
+			}
+		}
+
+		this.progressChange = function (data, newProgress) {
+			data.progress = newProgress;
+			let progress = 0;
+			for (const data of dataList) progress += data.progress * data.ratio;
+			progressBar.style.width = progress + '%';
+		}
+	}
+
 	function playTransition(onEnded) {
 		transition.classList.remove('hide');
 		transitionVideo.play().then(function () {
@@ -212,33 +246,69 @@ if (!window.performance) window.performance = {now: Date.now};
 	/*
 	 * Utils
 	 */
-	function loadResources(imagesToLoad, progress, onload) {
+	function loadImageResources(imagesToLoad, progressState) {
+		progressBar.registerTask(progressState);
 		const entries = Object.entries(imagesToLoad);
 		let imageLeft = 0;
-		for (const imageData of Object.values(imagesToLoad))
-			imageLeft += ((imageData instanceof Array) ? imageData.length : 1);
-		const total = 1 / imageLeft;
+		for (const imageData of Object.values(imagesToLoad)) imageLeft += ((imageData instanceof Array) ? imageData.length : 1);
 
+		const loadingState = new Float32Array(imageLeft);
+		const share = 1 / imageLeft;
+
+		let id = 0;
 		for (/**@type [string, string | Array]*/const imageData of entries) {
 			// Load each resource
 			const resource = imageData[1];
 			if (resource instanceof Array) {
 				const category = imagesToLoad[imageData[0]];
 				for (let i = 0; i < resource.length; i++)
-					loadImage(category, i, resource[i]);
+					loadImage(category, i, resource[i], id++);
 			} else {
-				loadImage(imagesToLoad, imageData[0], imageData[1]);
+				loadImage(imagesToLoad, imageData[0], imageData[1], id++);
 			}
 		}
 
-		function loadImage(dest, key, src) {
+		function loadImage(dest, key, src, id) {
+			const req = new XMLHttpRequest();
 			const image = new Image();
-			image.src = src;
-			image.onload = function () {
-				dest[key] = image;
-				if (--imageLeft === 0) onload();
-				else progress(1 - imageLeft * total);
+			dest[key] = image;
+			req.onprogress = function (e) {
+				loadingState[id] = e.loaded / e.total;
+				// Update progress
+				let nowLoad = 0;
+				for (let i = 0; i < loadingState.length; i++)
+					nowLoad += loadingState[i];
+				progressBar.progressChange(progressState, nowLoad * share);
 			};
+			req.onload = function () {
+				image.src = URL.createObjectURL(req.response);
+				if (--imageLeft === 0)
+					progressBar.progressDone(progressState);
+			};
+			req.open('GET', src);
+			req.responseType = 'blob';
+			req.send();
 		}
+	}
+
+	/**
+	 * @param {HTMLVideoElement} videoElement
+	 * @param {string} src
+	 * @param progressState
+	 */
+	function loadVideo(videoElement, src, progressState) {
+		progressBar.registerTask(progressState);
+		const req = new XMLHttpRequest();
+		req.onload = function () {
+			videoElement.src = URL.createObjectURL(req.response);
+			videoElement.load();
+			progressBar.progressDone(progressState);
+		};
+		req.onprogress = function (e) {
+			progressBar.progressChange(progressState, e.loaded / e.total);
+		};
+		req.open('GET', src);
+		req.responseType = 'blob';
+		req.send();
 	}
 })();

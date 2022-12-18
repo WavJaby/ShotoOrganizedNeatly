@@ -144,7 +144,8 @@ function GameControl() {
 		const canvasOffsetX = (mainCanvasElement.width - totalWidth) * 0.5,
 			canvasOffsetY = (mainCanvasElement.height - totalHeight) * 0.5;
 		grid.bgCanvasSize = (Math.max(tilesCountX, tilesCountY) + 3) * tilesSize;
-		const bgCanvasOffsetX = (mainCanvasElement.width - grid.bgCanvasSize) * 0.5;
+		const spaceWidth = (mainCanvasElement.width - grid.bgCanvasSize) * 0.5;
+		const bgCanvasOffsetRightX = spaceWidth + grid.bgCanvasSize;
 
 		canvas.fillStyle = '#C6B0A3';
 
@@ -162,80 +163,23 @@ function GameControl() {
 		}
 
 		// Add pieces for level
+		const shift = 0.5, margin = 20;
 		grid.piecesForLevel.length = pieceIDs.length;
-		const padding = 50, margin = 20;
-		let x = padding, ly = 0, ry = 0;
-		let rawPieceStart = 0;
-		let leftLineMaxHeight = 0, rightLineMaxHeight = 0;
-		/** @type {Piece[]}*/
 		const leftLinePieces = [], rightLinePieces = [];
-		let leftLine = true;
-		// Place pieces
+		let ly = 0, ry = 0;
+
 		for (let i = 0; i < pieceIDs.length; i++) {
 			const piece = grid.piecesForLevel[i] = pieces[pieceIDs[i]];
-			// const width = Math.max(piece.w, piece.h) + margin;
-			const width = piece.w + margin;
-
-			if (leftLine && x + width > bgCanvasOffsetX) {
-				// Center the pieces
-				for (let j = rawPieceStart; j < i; j++) {
-					const piece = grid.piecesForLevel[j];
-					piece.y += (leftLineMaxHeight - piece.h) * 0.5;
-					piece.x += (bgCanvasOffsetX - x) * 0.5;
-				}
-				x = bgCanvasOffsetX + grid.bgCanvasSize;
-				leftLine = false;
-				rawPieceStart = i;
-			} else if (x + width > mainCanvasElement.width - padding) {
-				// Center the pieces
-				for (let j = rawPieceStart; j < i; j++) {
-					const piece = grid.piecesForLevel[j];
-					piece.y += (rightLineMaxHeight - piece.h) * 0.5;
-					piece.x += ((mainCanvasElement.width - margin) - x) * 0.5;
-				}
-				x = padding;
-				leftLine = true;
-				rawPieceStart = i;
-				// New line
-				ly += leftLineMaxHeight + margin;
-				ry += rightLineMaxHeight + margin;
-				rightLineMaxHeight = 0;
-				leftLineMaxHeight = 0;
-			}
-
-			// Update line height
-			if (leftLine) {
-				if (piece.h > leftLineMaxHeight) leftLineMaxHeight = piece.h;
+			if (i % 2 === 0) {
+				piece.x = bgCanvasOffsetRightX + (spaceWidth - piece.w) * 0.5 * shift;
+				piece.y = ry;
+				ry += piece.h + margin;
+				rightLinePieces.push(piece);
 			} else {
-				if (piece.h > rightLineMaxHeight) rightLineMaxHeight = piece.h;
-			}
-
-			// piece.x = piece.h > piece.w ? x + (piece.h - piece.w) * 0.5 : x;
-			piece.x = x;
-			piece.y = leftLine ? ly : ry;
-			(leftLine ? leftLinePieces : rightLinePieces).push(piece);
-
-			x += width;
-
-			// Last piece
-			if (i + 1 === pieceIDs.length) {
-				ly += leftLineMaxHeight + margin;
-				ry += rightLineMaxHeight + margin;
-			}
-		}
-
-		// Center last piece
-		if (leftLine) {
-			for (let j = rawPieceStart; j < pieceIDs.length; j++) {
-				const piece = grid.piecesForLevel[j];
-				piece.y += (leftLineMaxHeight - piece.h) * 0.5;
-				piece.x += (bgCanvasOffsetX - x) * 0.5;
-			}
-		} else {
-			for (let j = rawPieceStart; j < pieceIDs.length; j++) {
-				const piece = grid.piecesForLevel[j];
-				piece.y += (rightLineMaxHeight - piece.h) * 0.5;
-				piece.x += ((mainCanvasElement.width - margin) - x) * 0.5;
+				piece.x = (spaceWidth - piece.w) * 0.5 * (1 + shift);
+				piece.y = ly;
+				ly += piece.h + margin;
+				leftLinePieces.push(piece);
 			}
 		}
 
@@ -534,9 +478,9 @@ function GameControl() {
 	function pieceRotate(piece, rotateIndex) {
 		// console.log('piece rotate');
 
-		const step = rotateIndex !== undefined ? rotateIndex - piece.rotateIndex : 1;
+		const step = rotateIndex !== undefined ? rotateIndex - piece.rotateIndex : -1;
 		piece.rotateFromAngle = piece.rotateIndex * Math.PI * 0.5;
-		piece.rotateIndex = rotateIndex !== undefined ? rotateIndex : ((piece.rotateIndex + 1) % 4);
+		piece.rotateIndex = rotateIndex !== undefined ? rotateIndex : ((piece.rotateIndex + 3) % 4);
 
 		// Change position, size
 		const orgW = piece.w, orgH = piece.h;
