@@ -7,8 +7,6 @@ if (!window.performance) window.performance = {now: Date.now};
 	// Canvas folder
 	const canvasFolder = document.getElementById('canvas');
 	const backgroundCanvasElement = document.createElement('canvas');
-	initBackground();
-	canvasFolder.appendChild(backgroundCanvasElement);
 
 	const pages = {
 		loading: document.getElementById('loading'),
@@ -39,12 +37,6 @@ if (!window.performance) window.performance = {now: Date.now};
 	const levelName = document.getElementById('inGame_levelName');
 
 
-	// Game control
-	/**@type{GameControl}*/
-	const gameControl = new GameControl();
-	canvasFolder.appendChild(gameControl.mainCanvasElement);
-	window.addEventListener('resize', windowResize);
-
 	// Levels
 	const levels = [
 		[1, 3, [3]],
@@ -66,27 +58,30 @@ if (!window.performance) window.performance = {now: Date.now};
 			'./res/shoto_3x3.png',
 		]
 	};
+	// Game control
+	/**@type{GameControl}*/
+	const gameControl = new GameControl();
 	// Load resources and process
 	console.time('Resources loaded');
 	console.time('Image loaded');
 	const resourcesLoadState = {ratio: 50, progress: 0};
-	const transitionVideoLoadState = {ratio: 50, progress: 0};
+	const transitionVideoLoadState = {ratio: 49, progress: 0};
+	const fontLoadState = {ratio: 1, progress: 0};
 	loadVideo(transitionVideo, 'res/shotoTransition.webm', transitionVideoLoadState);
 	loadImageResources(resources, resourcesLoadState);
-
+	// Load font
+	progressBar.registerTask(fontLoadState);
+	document.fonts.load('1em Just Another Hand').then(function () {progressBar.progressDone(fontLoadState)});
 	// On resources loaded
 	progressBar.onload = async function () {
 		console.timeEnd('Image loaded');
-
-		// Load font
-		await document.fonts.load('1em Just Another Hand');
 
 		// Init resources
 		gameControl.initResources(resources);
 		console.log(`Loaded ${resources.piecesImage.length} pieces`);
 
 		// Transition video
-		transitionVideo.playbackRate = 2;
+		transitionVideo.playbackRate = 1.5;
 
 		// Generate levels
 		const table = document.createElement('table');
@@ -119,7 +114,18 @@ if (!window.performance) window.performance = {now: Date.now};
 		requestAnimationFrame(render);
 
 		changePage(pages.mainMenu);
+
+
+		// gameControl.initLevel(levels[0]);
+		// gameControl.setInGame(true);
+		// changePage(pages.inGame);
 	};
+
+
+	canvasFolder.appendChild(backgroundCanvasElement);
+	initBackground();
+	canvasFolder.appendChild(gameControl.mainCanvasElement);
+	window.addEventListener('resize', windowResize);
 
 	// Functions
 	function Progressbar(progressBar) {
@@ -144,6 +150,7 @@ if (!window.performance) window.performance = {now: Date.now};
 			} else {
 				progressBar.style.width = '100%';
 				setTimeout(this.onload, 100);
+				dataList.length = 0;
 			}
 		}
 
@@ -157,6 +164,7 @@ if (!window.performance) window.performance = {now: Date.now};
 
 	function playTransition(onEnded) {
 		transition.classList.remove('hide');
+		transitionVideoOffset();
 		transitionVideo.play().then(function () {
 			setTimeout(onEnded, transitionVideo.duration * 500 * (1 / transitionVideo.playbackRate));
 		});
@@ -171,6 +179,10 @@ if (!window.performance) window.performance = {now: Date.now};
 	function windowResize() {
 		initBackground();
 		gameControl.resizeCanvas();
+	}
+
+	function transitionVideoOffset() {
+		transitionVideo.style.left = (window.innerWidth - transitionVideo.offsetWidth) * 0.5 + 'px';
 	}
 
 	function changePage(page) {

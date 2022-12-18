@@ -69,6 +69,11 @@ function GameControl() {
 	let inGame = false;
 
 	// Scene
+	const completeAnimationStars = [];
+	const completeAnimationDuration = 600;
+	let completeAnimationStartTime = 0;
+	let completeAnimation = false;
+
 	const grid = {
 		canvasElement: document.createElement('canvas'),
 		bgCanvasElement: document.createElement('canvas'),
@@ -109,6 +114,10 @@ function GameControl() {
 
 
 	// Functions
+	this.setInGame = function (boolean) {
+		inGame = boolean;
+	}
+
 	this.initResources = function (resources) {
 		processPiece(pieces, resources);
 		try {
@@ -116,18 +125,6 @@ function GameControl() {
 		} catch (e) {
 			console.error(e);
 		}
-	}
-
-	this.resizeCanvas = function () {
-		if (!inGame) return;
-		// console.log('Resize game canvas');
-
-		resizeMainCanvas();
-
-		// Recalculate anchor points
-		calculateAnchorPoints();
-
-		mainCanvasRefresh = true;
 	}
 
 	this.initLevel = function (levelSettings) {
@@ -193,11 +190,29 @@ function GameControl() {
 		mainCanvasRefresh = true;
 	}
 
+	this.resizeCanvas = function () {
+		if (!inGame) return;
+		// console.log('Resize game canvas');
+
+		resizeMainCanvas();
+
+		// Recalculate anchor points
+		calculateAnchorPoints();
+
+		mainCanvasRefresh = true;
+	}
+
 	this.render = function () {
 		if (!inGame) return;
 
 		// Calculate
 		calculatePiecesMove();
+
+		if (completeAnimation) {
+			mainCanvasRefresh = true;
+			if (performance.now() - completeAnimationStartTime > completeAnimationDuration)
+				completeAnimation = false;
+		}
 
 		// Rerender
 		if (mainCanvasRefresh) {
@@ -208,8 +223,11 @@ function GameControl() {
 
 			renderGrid();
 			renderPieces();
+			// Draw complete animation
+			if (completeAnimation) renderCompleteAnimation();
 
 			// Debug
+			mainCanvas.lineWidth = 1;
 			mainCanvas.fillStyle = mainCanvas.strokeStyle = '#F00';
 			const bgCanvasOffsetX = (mainCanvasElement.width - grid.bgCanvasSize) * 0.5;
 			mainCanvas.strokeRect(0, 0, bgCanvasOffsetX, mainCanvasElement.height);
@@ -221,10 +239,6 @@ function GameControl() {
 			mainCanvas.fillRect(0, 0, 10, 10);
 		} else
 			mainCanvas.clearRect(0, 0, 10, 10);
-	}
-
-	this.setInGame = function (boolean) {
-		inGame = boolean;
 	}
 
 	/*
@@ -434,6 +448,10 @@ function GameControl() {
 					gridTilesLeft += selectedPiece.shape[2].length;
 			}
 
+			// Complete
+			if (gridTilesLeft === 0) playCompleteAnimation();
+
+			// Debug
 			let result = '';
 			for (let i = 0; i < grid.tilesCountY; i++) {
 				for (let j = 0; j < grid.tilesCountX; j++)
@@ -441,10 +459,36 @@ function GameControl() {
 				result += '\n';
 			}
 			console.log(result);
-			console.log(gridTilesLeft);
-			console.log(selectedPiece);
 
 			selectedPiece = null;
+		}
+	}
+
+	/*
+	 * Draw functions
+	 */
+	function playCompleteAnimation() {
+		completeAnimationStars.length = 10;
+		for (let i = 0; i < completeAnimationStars.length; i++)
+			completeAnimationStars[i] = [
+				mouseX + (1 - Math.random() * 2) * 20, mouseY + (1 - Math.random() * 2) * 20,
+				Math.random() * 2 * Math.PI, Math.random() * 150 + 50,
+				Math.random() * 50 + 20,
+				Math.random() * 2 * Math.PI, (1 - Math.random() * 2) * Math.PI,
+				Math.random() > 0.5
+			];
+		completeAnimationStartTime = performance.now();
+		completeAnimation = true;
+	}
+
+	function renderCompleteAnimation() {
+		const progress = (performance.now() - completeAnimationStartTime) / completeAnimationDuration;
+		for (let i = 0; i < completeAnimationStars.length; i++) {
+			drawStar(
+				completeAnimationStars[i][0] + Math.cos(completeAnimationStars[i][2]) * completeAnimationStars[i][3] * progress,
+				completeAnimationStars[i][1] + Math.sin(completeAnimationStars[i][2]) * completeAnimationStars[i][3] * progress,
+				completeAnimationStars[i][4],
+				completeAnimationStars[i][5] + completeAnimationStars[i][6] * progress, 1 - progress, completeAnimationStars[i][7]);
 		}
 	}
 
@@ -564,6 +608,53 @@ function GameControl() {
 	/*
 	 * Canvas functions
 	 */
+	/**
+	 * @param {float}cx
+	 * @param {float}cy
+	 * @param {float}radius
+	 * @param {float}angle
+	 * @param {number}alpha
+	 * @param {boolean}stroke
+	 */
+	function drawStar(cx, cy, radius, angle, alpha, stroke) {
+		const innerRadius = radius * 0.45;
+		const step = Math.PI / 5;
+		let rot = Math.PI / 2 * 3 + angle;
+
+		mainCanvas.beginPath();
+
+		let orgX, orgY, centerX = 0, centerY = 0;
+		for (let i = 0; i < 5; i++) {
+			const nowX = cx + Math.cos(rot) * innerRadius;
+			const nowY = cy + Math.sin(rot) * innerRadius;
+			if (i === 0) {
+				orgX = nowX;
+				orgY = nowY;
+				mainCanvas.moveTo(nowX, nowY);
+			} else {
+				mainCanvas.arcTo(centerX, centerY, nowX, nowY, radius * 0.1);
+				mainCanvas.lineTo(nowX, nowY);
+			}
+			rot += step;
+			centerX = cx + Math.cos(rot) * radius;
+			centerY = cy + Math.sin(rot) * radius;
+			rot += step;
+		}
+		mainCanvas.arcTo(centerX, centerY, orgX, orgY, radius * 0.1);
+		mainCanvas.lineTo(orgX, orgY);
+
+		mainCanvas.closePath();
+
+		if (stroke) {
+			mainCanvas.strokeStyle = `rgba(255,215,0,${alpha})`;
+			mainCanvas.lineWidth = radius * 0.1;
+			mainCanvas.stroke();
+		} else {
+			mainCanvas.fillStyle = `rgba(255,215,0,${alpha})`;
+			mainCanvas.fill();
+		}
+	}
+
 	function calculateAnchorPoints() {
 		const canvasOffsetX = (mainCanvasElement.width - grid.canvasElement.width) * 0.5,
 			canvasOffsetY = (mainCanvasElement.height - grid.canvasElement.height) * 0.5;
