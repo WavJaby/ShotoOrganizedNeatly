@@ -38,11 +38,11 @@ function Piece(x, y, w, h, id, shape, image) {
 	this.stickToGridStartTime = 0;
 	this.stickToXFrom = 0;
 	this.stickToYFrom = 0;
-	this.stickToX = -1;
-	this.stickToY = -1;
+	this.stickToX = 0;
+	this.stickToY = 0;
 }
 
-function GameControl() {
+function GameControl(onGameCompleted) {
 	const tilesGap = 3;
 	const tilesSize = 64; // With gap
 	const rotateTime = 1 / 200;
@@ -64,6 +64,7 @@ function GameControl() {
 	const pieces = [];
 
 	const mainCanvasElement = this.mainCanvasElement = document.createElement('canvas');
+	mainCanvasElement.className = 'hide';
 	const mainCanvas = mainCanvasElement.getContext('2d');
 	let mainCanvasRefresh = false;
 	let inGame = false;
@@ -85,6 +86,7 @@ function GameControl() {
 		piecesForLevel: [],
 	}
 	let gridTileFilled;
+	let lastGridTilesLeft;
 	let gridTilesLeft;
 	/**@type{Piece}*/
 	let selectedPiece = null;
@@ -116,6 +118,9 @@ function GameControl() {
 	// Functions
 	this.setInGame = function (boolean) {
 		inGame = boolean;
+		if (inGame) mainCanvasElement.classList.remove('hide');
+		else mainCanvasElement.classList.add('hide');
+		mainCanvasRefresh = true;
 	}
 
 	this.initResources = function (resources) {
@@ -134,7 +139,7 @@ function GameControl() {
 		const tilesCountY = grid.tilesCountY = levelSettings[1];
 		const totalWidth = grid.canvasElement.width = tilesCountX * tilesSize;
 		const totalHeight = grid.canvasElement.height = tilesCountY * tilesSize;
-		gridTilesLeft = tilesCountX * tilesCountY;
+		lastGridTilesLeft = gridTilesLeft = tilesCountX * tilesCountY;
 		gridTileFilled = new Uint8Array(gridTilesLeft);
 
 		const canvas = grid.canvasElement.getContext('2d');
@@ -167,6 +172,7 @@ function GameControl() {
 
 		for (let i = 0; i < pieceIDs.length; i++) {
 			const piece = grid.piecesForLevel[i] = pieces[pieceIDs[i]];
+			pieceReset(piece);
 			if (i % 2 === 0) {
 				piece.x = bgCanvasOffsetRightX + (spaceWidth - piece.w) * 0.5 * shift;
 				piece.y = ry;
@@ -185,9 +191,6 @@ function GameControl() {
 
 		for (const rightLinePiece of rightLinePieces)
 			rightLinePiece.y += (mainCanvasElement.height - ry) * 0.5;
-
-		// Refresh
-		mainCanvasRefresh = true;
 	}
 
 	this.resizeCanvas = function () {
@@ -449,7 +452,11 @@ function GameControl() {
 			}
 
 			// Complete
-			if (gridTilesLeft === 0) playCompleteAnimation();
+			if (gridTilesLeft === 0 && lastGridTilesLeft !== gridTilesLeft) {
+				playCompleteAnimation();
+				onGameCompleted();
+			}
+			lastGridTilesLeft = gridTilesLeft;
 
 			// Debug
 			let result = '';
@@ -459,6 +466,7 @@ function GameControl() {
 				result += '\n';
 			}
 			console.log(result);
+			console.log(gridTilesLeft);
 
 			selectedPiece = null;
 		}
@@ -785,6 +793,33 @@ function GameControl() {
 	/*
 	 * Utils
 	 */
+	/**
+	 *
+	 * @param {Piece} piece
+	 */
+	function pieceReset(piece) {
+		piece.w = piece.originalW;
+		piece.h = piece.originalH;
+
+		// can be changed
+		piece.rotateIndexOnGrid = 0;
+		piece.rotateIndex = 0;
+		piece.isStickToGrid = false;
+		piece.gridOffset = -1;
+
+		/*
+			Animation used
+		 */
+		// rotate
+		piece.rotateAngle = 0;
+		piece.rotateCount = 0;
+
+		// move
+		piece.isStickToGridTemporary = false;
+		piece.isMoving = false;
+		piece.isDetaching = false;
+	}
+
 	function easeInOut(t) {
 		return t * t * (3 - 2 * t);
 	}

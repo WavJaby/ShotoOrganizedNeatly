@@ -35,6 +35,9 @@ if (!window.performance) window.performance = {now: Date.now};
 
 	// In game
 	const levelName = document.getElementById('inGame_levelName');
+	const backBtn = document.getElementById('inGame_backBtn');
+	const retryBtn = document.getElementById('inGame_retryBtn');
+	const nextLevelBtn = document.getElementById('inGame_nextLevelBtn');
 
 
 	// Levels
@@ -46,6 +49,10 @@ if (!window.performance) window.performance = {now: Date.now};
 	// Resources
 	const resources = {
 		gridBGImage: './res/grid_bg.png',
+		leftArrowIcon: './res/left_arrow_icon.svg',
+		rightArrowIcon: './res/right_arrow_icon.svg',
+		retryBtn: './res/retry_btn.svg',
+		skipBtn: './res/skip_btn.svg',
 		piecesImage: [
 			'./res/shoto_1x1.png',
 			'./res/shoto_1x1_1.png',
@@ -60,7 +67,7 @@ if (!window.performance) window.performance = {now: Date.now};
 	};
 	// Game control
 	/**@type{GameControl}*/
-	const gameControl = new GameControl();
+	const gameControl = new GameControl(onGameCompleted);
 	// Load resources and process
 	console.time('Resources loaded');
 	console.time('Image loaded');
@@ -83,6 +90,33 @@ if (!window.performance) window.performance = {now: Date.now};
 		// Transition video
 		transitionVideo.playbackRate = 1.5;
 
+		// In game
+		backBtn.appendChild(resources.leftArrowIcon);
+		backBtn.onclick = function () {
+			gameControl.setInGame(false);
+			changePage(pages.levels);
+		};
+		retryBtn.appendChild(resources.retryBtn);
+		retryBtn.onclick = function () {
+			gameControl.initLevel(levels[retryBtn.level]);
+			transitionStart(function () {
+				nextLevelBtn.classList.remove('completed');
+				gameControl.setInGame(true);
+			});
+		};
+		nextLevelBtn.appendChild(resources.skipBtn);
+		nextLevelBtn.appendChild(resources.rightArrowIcon);
+		nextLevelBtn.onclick = function () {
+			const name = 'LEVEL ' + (nextLevelBtn.level + 1);
+			gameControl.initLevel(levels[nextLevelBtn.level]);
+			nextLevelBtn.level++;
+			transitionStart(function () {
+				levelName.textContent = name;
+				nextLevelBtn.classList.remove('completed');
+				gameControl.setInGame(true);
+			});
+		}
+
 		// Generate levels
 		const table = document.createElement('table');
 		table.className = 'center';
@@ -98,8 +132,11 @@ if (!window.performance) window.performance = {now: Date.now};
 				tableCell.textContent = name;
 				tableCell.onclick = function () {
 					levelName.textContent = 'LEVEL ' + name;
+					nextLevelBtn.classList.remove('completed');
+					retryBtn.level = level;
+					nextLevelBtn.level = level + 1;
 					gameControl.initLevel(levels[level]);
-					playTransition(function () {
+					transitionStart(function () {
 						gameControl.setInGame(true);
 						changePage(pages.inGame);
 					});
@@ -121,6 +158,9 @@ if (!window.performance) window.performance = {now: Date.now};
 		// changePage(pages.inGame);
 	};
 
+	function onGameCompleted() {
+		nextLevelBtn.classList.add('completed');
+	}
 
 	canvasFolder.appendChild(backgroundCanvasElement);
 	initBackground();
@@ -162,11 +202,11 @@ if (!window.performance) window.performance = {now: Date.now};
 		}
 	}
 
-	function playTransition(onEnded) {
+	function transitionStart(ended) {
 		transition.classList.remove('hide');
 		transitionVideoOffset();
 		transitionVideo.play().then(function () {
-			setTimeout(onEnded, transitionVideo.duration * 500 * (1 / transitionVideo.playbackRate));
+			setTimeout(ended, transitionVideo.duration * 500 * (1 / transitionVideo.playbackRate));
 		});
 	}
 

@@ -9,13 +9,13 @@
 <body>
 
 <div id="canvas"></div>
-<div id="domOverlay">
+<div id="domOverlay" class="noSelect">
 	<div id="loading">
 		<div id="loading_progressBar" class="center">
 			<div></div>
 		</div>
 	</div>
-	<div id="mainMenu" class="hide noSelect">
+	<div id="mainMenu" class="hide">
 		<div class="center">
 			<button id="mainMenu_continueBtn">CONTINUE</button>
 			<button id="mainMenu_playBtn">PLAY</button>
@@ -23,9 +23,9 @@
 			<button id="mainMenu_exitBtn">EXIT</button>
 		</div>
 	</div>
-	<div id="levels" class="hide noSelect"></div>
+	<div id="levels" class="hide"></div>
 	<div id="inGame" class="hide">
-		<h1 id="inGame_levelName" class="noSelect"></h1>
+		<h1 id="inGame_levelName"></h1>
 		<button id="inGame_backBtn"></button>
 		<button id="inGame_retryBtn"></button>
 		<button id="inGame_nextLevelBtn"></button>
