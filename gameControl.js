@@ -42,7 +42,7 @@ function Piece(x, y, w, h, id, shape, image) {
 	this.stickToY = 0;
 }
 
-function GameControl(onGameCompleted) {
+function GameControl(onGameCompleted, audios) {
 	const tilesGap = 3;
 	const tilesSize = 64; // With gap
 	const rotateTime = 1 / 200;
@@ -74,6 +74,9 @@ function GameControl(onGameCompleted) {
 	const completeAnimationDuration = 600;
 	let completeAnimationStartTime = 0;
 	let completeAnimation = false;
+	let gridBackgroundAnimationState = 0;
+	let gridBackgroundAnimationStartTime = 0;
+	let gridBackgroundAnimationDuration = 500;
 
 	const grid = {
 		canvasElement: document.createElement('canvas'),
@@ -116,11 +119,16 @@ function GameControl(onGameCompleted) {
 
 
 	// Functions
+	this.hide = function () {mainCanvasElement.classList.add('hide');}
+
+	this.show = function () {mainCanvasElement.classList.remove('hide');}
+
 	this.setInGame = function (boolean) {
 		inGame = boolean;
-		if (inGame) mainCanvasElement.classList.remove('hide');
-		else mainCanvasElement.classList.add('hide');
-		mainCanvasRefresh = true;
+		if (inGame) {
+			resizeMainCanvas();
+			mainCanvasRefresh = true;
+		}
 	}
 
 	this.initResources = function (resources) {
@@ -133,7 +141,6 @@ function GameControl(onGameCompleted) {
 	}
 
 	this.initLevel = function (levelSettings) {
-		resizeMainCanvas();
 		const pieceIDs = levelSettings[2];
 		const tilesCountX = grid.tilesCountX = levelSettings[0];
 		const tilesCountY = grid.tilesCountY = levelSettings[1];
@@ -143,10 +150,10 @@ function GameControl(onGameCompleted) {
 		gridTileFilled = new Uint8Array(gridTilesLeft);
 
 		const canvas = grid.canvasElement.getContext('2d');
-		const canvasOffsetX = (mainCanvasElement.width - totalWidth) * 0.5,
-			canvasOffsetY = (mainCanvasElement.height - totalHeight) * 0.5;
+		const canvasOffsetX = (window.innerWidth - totalWidth) * 0.5,
+			canvasOffsetY = (window.innerHeight - totalHeight) * 0.5;
 		grid.bgCanvasSize = (Math.max(tilesCountX, tilesCountY) + 3) * tilesSize;
-		const spaceWidth = (mainCanvasElement.width - grid.bgCanvasSize) * 0.5;
+		const spaceWidth = (window.innerWidth - grid.bgCanvasSize) * 0.5;
 		const bgCanvasOffsetRightX = spaceWidth + grid.bgCanvasSize;
 
 		canvas.fillStyle = '#C6B0A3';
@@ -187,10 +194,10 @@ function GameControl(onGameCompleted) {
 		}
 
 		for (const leftLinePiece of leftLinePieces)
-			leftLinePiece.y += (mainCanvasElement.height - ly) * 0.5;
+			leftLinePiece.y += (window.innerHeight - ly) * 0.5;
 
 		for (const rightLinePiece of rightLinePieces)
-			rightLinePiece.y += (mainCanvasElement.height - ry) * 0.5;
+			rightLinePiece.y += (window.innerHeight - ry) * 0.5;
 	}
 
 	this.resizeCanvas = function () {
@@ -217,8 +224,15 @@ function GameControl(onGameCompleted) {
 				completeAnimation = false;
 		}
 
+		if (performance.now() - gridBackgroundAnimationStartTime > gridBackgroundAnimationDuration) {
+			gridBackgroundAnimationStartTime = performance.now();
+			gridBackgroundAnimationState = gridBackgroundAnimationState === 0 ? 1 : 0;
+			mainCanvasRefresh = true;
+		}
+
 		// Rerender
 		if (mainCanvasRefresh) {
+			// console.log('Game canvas refresh');
 			mainCanvasRefresh = false;
 
 			// Clear canvas
@@ -276,12 +290,17 @@ function GameControl(onGameCompleted) {
 			i++;
 		}
 		if (i !== grid.piecesForLevel.length) {
-			selectedPiece.moveOffsetX = mouseX - selectedPiece.x;
-			selectedPiece.moveOffsetY = mouseY - selectedPiece.y;
 			if (isMouseLeftDown) {
+				selectedPiece.moveOffsetX = mouseX - selectedPiece.x;
+				selectedPiece.moveOffsetY = mouseY - selectedPiece.y;
 				selectedPiece.startMoveX = selectedPiece.x;
 				selectedPiece.startMoveY = selectedPiece.y;
 				stickToMouse = true;
+				
+				if (e.button === 0) {
+					audios.meow_normal_5.currentTime = 0;
+					audios.meow_normal_5.play();
+				}
 			}
 
 			// To top layer
@@ -617,12 +636,12 @@ function GameControl(onGameCompleted) {
 	 * Canvas functions
 	 */
 	/**
-	 * @param {float}cx
-	 * @param {float}cy
-	 * @param {float}radius
-	 * @param {float}angle
-	 * @param {number}alpha
-	 * @param {boolean}stroke
+	 * @param {float} cx
+	 * @param {float} cy
+	 * @param {float} radius
+	 * @param {float} angle
+	 * @param {number} alpha
+	 * @param {boolean} stroke
 	 */
 	function drawStar(cx, cy, radius, angle, alpha, stroke) {
 		const innerRadius = radius * 0.45;
@@ -749,9 +768,16 @@ function GameControl(onGameCompleted) {
 	}
 
 	function renderGrid() {
-		mainCanvas.drawImage(grid.bgCanvasElement,
-			(mainCanvasElement.width - grid.bgCanvasSize) * 0.5, (mainCanvasElement.height - grid.bgCanvasSize) * 0.5,
-			grid.bgCanvasSize, grid.bgCanvasSize);
+		if (gridBackgroundAnimationState === 0)
+			// 0 deg
+			mainCanvas.drawImage(grid.bgCanvasElement,
+				(mainCanvasElement.width - grid.bgCanvasSize) * 0.5, (mainCanvasElement.height - grid.bgCanvasSize) * 0.5,
+				grid.bgCanvasSize, grid.bgCanvasSize);
+		else
+			// 90 deg
+			drawImage(grid.bgCanvasElement,
+				Math.PI * 1.5, (mainCanvasElement.width - grid.bgCanvasSize) * 0.5, (mainCanvasElement.height - grid.bgCanvasSize) * 0.5,
+				grid.bgCanvasSize, grid.bgCanvasSize);
 
 		mainCanvas.drawImage(grid.canvasElement,
 			(mainCanvasElement.width - grid.canvasElement.width) * 0.5,
