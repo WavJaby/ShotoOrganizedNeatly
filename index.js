@@ -40,11 +40,15 @@ if (!window.performance) window.performance = {now: Date.now};
 	const nextLevelBtn = document.getElementById('inGame_nextLevelBtn');
 
 
-	// Levels
+	// Levels [width, height, [disabled tile], [used piece]]
 	const levels = [
-		[1, 3, [3]],
-		[3, 1, [3]],
-		[5, 5, [5, 6, 7, 8]],
+		[1, 3, [], [3]],
+		[3, 1, [], [3]],
+		[3, 3, [], [3, 6]],
+		[4, 4, [], [0, 3, 6, 6]],
+		[5, 5, [0, 1, 5, 10, 15, 16, 20, 21], [0, 0, 3, 6, 6]],
+		[4, 4, [0], [3, 3, 8]],
+		[5, 5, [], [5, 6, 7, 8]],
 	];
 	// Resources
 	const images = {
@@ -114,6 +118,7 @@ if (!window.performance) window.performance = {now: Date.now};
 		nextLevelBtn.appendChild(images.skipBtn);
 		nextLevelBtn.appendChild(images.rightArrowIcon);
 		nextLevelBtn.onclick = function () {
+			if (!gameControl.isComplete()) return;
 			gameControl.setInGame(false);
 			const name = 'LEVEL ' + (nextLevelBtn.level + 1);
 			gameControl.initLevel(levels[nextLevelBtn.level]);
@@ -130,26 +135,24 @@ if (!window.performance) window.performance = {now: Date.now};
 		table.className = 'center';
 		pages.levels.appendChild(table);
 		const tbody = table.createTBody();
-		let levelCount = 0;
-		for (let i = 0; i < 5; i++) {
-			const tableRow = tbody.insertRow();
-			for (let j = 0; j < 5; j++) {
-				const tableCell = tableRow.insertCell();
-				const level = levelCount++;
-				const name = (level + 1).toString();
-				tableCell.textContent = name;
-				tableCell.onclick = function () {
-					levelName.textContent = 'LEVEL ' + name;
-					nextLevelBtn.classList.remove('completed');
-					retryBtn.level = level;
-					nextLevelBtn.level = level + 1;
-					gameControl.initLevel(levels[level]);
-					transitionStart(function () {
-						gameControl.setInGame(true);
-						gameControl.show();
-						changePage(pages.inGame);
-					});
-				}
+		let tableRow;
+		for (let i = 0; i < levels.length; i++) {
+			if (i % 4 === 0)
+				tableRow = tbody.insertRow();
+			const tableCell = tableRow.insertCell();
+			const name = (i + 1).toString();
+			tableCell.textContent = name;
+			tableCell.onclick = function () {
+				levelName.textContent = 'LEVEL ' + name;
+				nextLevelBtn.classList.remove('completed');
+				retryBtn.level = i;
+				nextLevelBtn.level = i + 1;
+				gameControl.initLevel(levels[i]);
+				transitionStart(function () {
+					gameControl.setInGame(true);
+					gameControl.show();
+					changePage(pages.inGame);
+				});
 			}
 		}
 

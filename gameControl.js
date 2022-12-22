@@ -40,6 +40,10 @@ function Piece(x, y, w, h, id, shape, image) {
 	this.stickToYFrom = 0;
 	this.stickToX = 0;
 	this.stickToY = 0;
+
+	this.clone = function () {
+		return new Piece(this.x, this.y, this.originalW, this.originalH, this.id, this.shape, this.image);
+	}
 }
 
 function GameControl(onGameCompleted, audios) {
@@ -47,7 +51,7 @@ function GameControl(onGameCompleted, audios) {
 	const tilesSize = 64; // With gap
 	const rotateTime = 1 / 200;
 	const stickToGridTime = 1 / 200;
-	const stickThreshold = 33;
+	const stickThreshold = 32;
 	const unStickThreshold = 32;
 	const piecesShape = [
 		[1, 1, [0]],
@@ -68,6 +72,7 @@ function GameControl(onGameCompleted, audios) {
 	const mainCanvas = mainCanvasElement.getContext('2d');
 	let mainCanvasRefresh = false;
 	let inGame = false;
+	let isComplete = false;
 
 	// Scene
 	const completeAnimationStars = [];
@@ -91,6 +96,8 @@ function GameControl(onGameCompleted, audios) {
 	let gridTileFilled;
 	let lastGridTilesLeft;
 	let gridTilesLeft;
+	let disabledTiles;
+
 	/**@type{Piece}*/
 	let selectedPiece = null;
 	let stickToMouse = false;
@@ -131,6 +138,10 @@ function GameControl(onGameCompleted, audios) {
 		}
 	}
 
+	this.isComplete = function () {
+		return isComplete;
+	}
+
 	this.initResources = function (resources) {
 		processPiece(pieces, resources);
 		try {
@@ -141,13 +152,15 @@ function GameControl(onGameCompleted, audios) {
 	}
 
 	this.initLevel = function (levelSettings) {
-		const pieceIDs = levelSettings[2];
+		disabledTiles = levelSettings[2];
+		const pieceIDs = levelSettings[3];
 		const tilesCountX = grid.tilesCountX = levelSettings[0];
 		const tilesCountY = grid.tilesCountY = levelSettings[1];
 		const totalWidth = grid.canvasElement.width = tilesCountX * tilesSize;
 		const totalHeight = grid.canvasElement.height = tilesCountY * tilesSize;
 		lastGridTilesLeft = gridTilesLeft = tilesCountX * tilesCountY;
 		gridTileFilled = new Uint8Array(gridTilesLeft);
+		isComplete = false;
 
 		const canvas = grid.canvasElement.getContext('2d');
 		const canvasOffsetX = (window.innerWidth - totalWidth) * 0.5,
@@ -163,11 +176,19 @@ function GameControl(onGameCompleted, audios) {
 		let k = 0;
 		for (let i = 0; i < tilesCountY; i++) {
 			for (let j = 0; j < tilesCountX; j++) {
-				const x = tilesSize * j, y = tilesSize * i;
-				grid.anchorPoints[k++] = x + canvasOffsetX;
-				grid.anchorPoints[k++] = y + canvasOffsetY;
-				// Draw tiles
-				canvas.fillRect(x + tilesGap, y + tilesGap, tilesSize - tilesGap * 2, tilesSize - tilesGap * 2);
+				if (disabledTiles.indexOf(k >> 1) !== -1) {
+					gridTilesLeft--;
+					lastGridTilesLeft--;
+					gridTileFilled[k >> 1] = 1;
+					grid.anchorPoints[k++] = 0xFFFFFFFF;
+					grid.anchorPoints[k++] = 0xFFFFFFFF;
+				} else {
+					const x = tilesSize * j, y = tilesSize * i;
+					grid.anchorPoints[k++] = x + canvasOffsetX;
+					grid.anchorPoints[k++] = y + canvasOffsetY;
+					// Draw tiles
+					canvas.fillRect(x + tilesGap, y + tilesGap, tilesSize - tilesGap * 2, tilesSize - tilesGap * 2);
+				}
 			}
 		}
 
@@ -178,7 +199,7 @@ function GameControl(onGameCompleted, audios) {
 		let ly = 0, ry = 0;
 
 		for (let i = 0; i < pieceIDs.length; i++) {
-			const piece = grid.piecesForLevel[i] = pieces[pieceIDs[i]];
+			const piece = grid.piecesForLevel[i] = pieces[pieceIDs[i]].clone();
 			pieceReset(piece);
 			if (i % 2 === 0) {
 				piece.x = bgCanvasOffsetRightX + (spaceWidth - piece.w) * 0.5 * shift;
@@ -296,7 +317,7 @@ function GameControl(onGameCompleted, audios) {
 				selectedPiece.startMoveX = selectedPiece.x;
 				selectedPiece.startMoveY = selectedPiece.y;
 				stickToMouse = true;
-				
+
 				if (e.button === 0) {
 					audios.meow_normal_5.currentTime = 0;
 					audios.meow_normal_5.play();
@@ -472,6 +493,7 @@ function GameControl(onGameCompleted, audios) {
 
 			// Complete
 			if (gridTilesLeft === 0 && lastGridTilesLeft !== gridTilesLeft) {
+				isComplete = true;
 				playCompleteAnimation();
 				onGameCompleted();
 			}
@@ -600,8 +622,9 @@ function GameControl(onGameCompleted, audios) {
 	function findPointToStick(positionX, positionY, threshold, piece, setOffset) {
 		let i = 0;
 		const len = grid.tilesCountX * grid.tilesCountY * 2;
-		for (let j = 0; j < len; j += 2) {
+		for (let j = 0; j < len; j += 2, i++) {
 			const x = grid.anchorPoints[j], y = grid.anchorPoints[j + 1];
+			if (x === 0xFFFFFFFF) continue;
 			let addX = false, addY = false;
 			if (
 				Math.abs(positionX - x) < threshold && Math.abs(positionY - y) < threshold ||
@@ -624,7 +647,6 @@ function GameControl(onGameCompleted, audios) {
 				pieceStick(toX, toY, piece);
 				return true;
 			}
-			i++;
 		}
 
 		if (setOffset)
@@ -690,8 +712,13 @@ function GameControl(onGameCompleted, audios) {
 		let k = 0;
 		for (let i = 0; i < grid.tilesCountY; i++) {
 			for (let j = 0; j < grid.tilesCountX; j++) {
-				grid.anchorPoints[k++] = tilesSize * j + canvasOffsetX;
-				grid.anchorPoints[k++] = tilesSize * i + canvasOffsetY;
+				if (disabledTiles.indexOf(k >> 1) !== -1) {
+					grid.anchorPoints[k++] = 0xFFFFFFFF;
+					grid.anchorPoints[k++] = 0xFFFFFFFF;
+				} else {
+					grid.anchorPoints[k++] = tilesSize * j + canvasOffsetX;
+					grid.anchorPoints[k++] = tilesSize * i + canvasOffsetY;
+				}
 			}
 		}
 
